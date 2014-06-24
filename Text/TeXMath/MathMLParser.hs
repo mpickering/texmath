@@ -10,7 +10,6 @@ import Text.Parsec.Pos (newPos)
 import Text.Parsec hiding (space)
 import Text.TeXMath.Shared (getTextType)
 import Data.Maybe
-import Debug.Trace
 import Data.List (transpose)
 
 parseMathML :: String -> Either String [Exp]
@@ -296,10 +295,8 @@ pInTags :: String -> MML a
         -> MML a
 pInTags tagtype parser = try $ do
   pSatisfy (~== TagOpen tagtype [])
-  trace (tagtype ++ " open") (return ())
   r <- parser 
   pSatisfy (~== TagClose tagtype)
-  trace (tagtype ++ " close") (return ())
   return r
 
 pBlank :: MML ()
