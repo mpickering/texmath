@@ -19,10 +19,15 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 {- | Functions for converting LaTeX math formulas to MathML.
 -}
 
-module Text.TeXMath ( texMathToMathML, texMathToOMML, texMathToPandoc,
+module Text.TeXMath ( texMathToMathML, 
+                      texMathToOMML, 
+                      texMathToPandoc,
+                      mathMLToOMML,
+                      mathMLToPandoc,
                       DisplayType(..) )
 where
 import Text.TeXMath.Parser
+import Text.TeXMath.MathMLParser
 import Text.TeXMath.MathML
 import Text.TeXMath.OMML
 import Text.TeXMath.Pandoc
@@ -41,5 +46,15 @@ texMathToOMML dt inp = inp `seq`
 texMathToPandoc :: DisplayType -> String -> Either String [Inline]
 texMathToPandoc dt inp = inp `seq`
   either Left (Right . maybe fallback id . toPandoc dt) $ parseFormula inp
+  where fallback = [Str $ delim ++ inp ++ delim]
+        delim    = case dt of { DisplayInline -> "$"; DisplayBlock -> "$$" }
+
+mathMLToOMML :: DisplayType -> String -> Either String Element
+mathMLToOMML dt inp = inp `seq`
+  either Left (Right . toOMML dt) $ parseMathML inp
+
+mathMLToPandoc :: DisplayType -> String -> Either String [Inline]
+mathMLToPandoc dt inp = inp `seq`
+  either Left (Right . maybe fallback id . toPandoc dt) $ parseMathML inp
   where fallback = [Str $ delim ++ inp ++ delim]
         delim    = case dt of { DisplayInline -> "$"; DisplayBlock -> "$$" }

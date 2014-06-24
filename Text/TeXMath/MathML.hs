@@ -69,6 +69,7 @@ unaryOps :: M.Map String String
 unaryOps = M.fromList
   [ ("\\sqrt", "msqrt")
   , ("\\surd", "msqrt")
+  , ("\\phantom", "mphantom")
   ]
 
 showUnary :: String -> Exp -> Element
