@@ -1,179 +1,180 @@
-module Text.TeXMath.MathMLParser (parseMathML) where
+{-# LANGUAGE ViewPatterns #-}
+{-
 
-import Text.HTML.TagSoup
-import Text.HTML.TagSoup.Match
+Unimplemented 
+  
+  mliteral
+  multi
+  malignmark
+  maligngroup
+  maction
+  Elementary Math
+  -}
+module Text.TeXMath.MathMLParser (testRead, parseMathML) where
+
+
+import Text.XML.Light hiding (onlyText)
 import Control.Monad
 import Text.TeXMath.Types
-import Control.Applicative ((<*>), (<*), (*>), (<$>), (<$))
+import Control.Applicative ((<*>), (<*), (*>), (<$>), (<$), (<|>))
 import Control.Arrow ((&&&))
-import Text.Parsec.Pos (newPos)
-import Text.Parsec hiding (space)
 import Text.TeXMath.Shared (getTextType)
 import Data.Maybe
 import Data.List (transpose)
 
+testRead :: String -> IO (Either String [Exp])
+testRead s = parseMathML <$> readFile s 
+
 parseMathML :: String -> Either String [Exp]
-parseMathML inp = either (Left . show) (Right . id) $ 
-                    (parse formula "" tags)
-    where tags = removeComments $ canonicalizeTags $
-                   parseTagsOptions parseOptions{ optTagPosition = True } inp
+parseMathML inp = (:[]) <$> (i >>= expr)
+  where
+    i = maybeToEither "Invalid XML" (parseXMLDoc inp)
 
-type MML = Parsec [Tag String] ()
+type MML = Either String 
 
-formula :: MML [Exp]
-formula = do 
-  optional pBlank
-  r <- pInTags "math" (many expr)
-  optional pBlank
-  eof
-  return r
-
-expr :: MML Exp
-expr =
-  optional (many ignored) *>
-  choice  
-    [ ident
-    , number
-    , op
-    , text 
-    , space 
-    -- grouping
-    , row
-    , frac
-    , msqrt
-    , kroot
-    , style
-    , merror
-    , padded
-    , phantom
-    , enclosed
-    , fenced
-    , sub
-    , sup
-    , subsup 
-    , under
-    , over 
-    , underover
-    , table
-    ] <* (optional $ many ignored)
-
-  
-ignored :: MML ()
-ignored = try $ choice $
-  [ literal
-  , pBlank
-  , multi
-  , none
-  , alignmark
-  , aligngroup
-  , action
-  ] ++ elemMath
-  
+expr :: Element -> MML Exp
+expr e = 
+  case name e of
+    "math" -> EGrouped <$> (mapM expr cs)
+    "mi" -> ident e
+    "mn" -> number e
+    "mo" -> op e
+    "mtext" -> text e
+    "mspace" -> space e
+    "mrow" -> row e
+    "mfrac" -> frac e
+    "msqrt" -> msqrt e
+    "mroot" -> kroot e
+    "mstyle" -> style e
+    "merror" -> merror e
+    "mpadded" -> padded e
+    "mphantom" -> phantom e
+    "mfenced" -> fenced e
+    "menclose" -> enclosed e
+    "msub" -> sub e
+    "msup" -> sup e
+    "msubsup" -> subsup e
+    "munder" -> under e
+    "mover" -> over e
+    "munderover" -> underover e
+    "mtable" -> table e
+    _ -> return $ EGrouped []
+  where
+    cs = elChildren e
 
 -- Tokens
 
-ident :: MML Exp
-ident =  EIdentifier <$> pInTags "mi" (pAnyString <|> return "")
+getString :: Element -> MML String
+getString e = if null s then Left ("getString " ++ (err e)) else Right s
+  where s = (stripSpaces . concatMap cdData .  onlyText . elContent) e
 
-number :: MML Exp
-number = ENumber <$> pInTags "mn" pAnyString
+ident :: Element -> MML Exp
+ident e =  EIdentifier <$> (getString e <|> Right "")
+ 
+number :: Element -> MML Exp
+number e = ENumber <$> getString e
 
-op :: MML Exp
-op = try $ do
-  tag <- lookAhead $ pSatisfy $ (~== TagOpen "mo" []) 
-  let stretchy = fromAttrib "stretchy" tag
-  let f = case stretchy of 
-            "true" -> EStretchy
-            _ -> id
-  f . EMathOperator <$> pInTags "mo" pAnyString
+op :: Element -> MML Exp
+op e = EMathOperator <$> getString e
+     
 
-text :: MML Exp 
-text = try $ do
-  tag <- lookAhead $ pSatisfy $ (~== TagOpen "mtext" [])
-  let textStyle = getTextType $ fromAttrib "mathvariant" tag
-  EText textStyle <$> pInTags "mtext" pAnyString
+text :: Element -> MML Exp 
+text e = do
+  let textStyle = maybe TextNormal getTextType 
+                    (findAttrQ "mathvariant" e)
+  EText textStyle <$> getString e 
 
-
-space :: MML Exp
-space = try $ do
-  TagOpen _ attr <- pSelfClosing "mspace" 
-  let width = fromMaybe "0em" (lookup "width" attr)
+space :: Element -> MML Exp
+space e = do
+  let width = fromMaybe "0em" (findAttrQ "width" e)
   return $ ESpace width
-
-
-literal :: MML ()
-literal = () <$ pInTags "ms" pAnyTag
-
-none :: MML ()
-none = () <$ pSelfClosing "none" 
-
 
 -- Layout 
 
-row :: MML Exp
-row = EGrouped <$> pInTags "mrow" (many expr)
 
-frac :: MML Exp
-frac = pInTags "mfrac" (EBinary "\\frac" <$> expr <*> expr)
+checkArgs :: Int -> Element -> MML [Element]
+checkArgs x e = do
+  let cs = elChildren e
+  guard (nargs x cs)
+  return cs
 
-msqrt :: MML Exp
-msqrt = EUnary "\\sqrt" <$> pInTags "msqrt" maybeRow
+row :: Element -> MML Exp
+row e = EGrouped <$> mapM expr (elChildren e)
 
-kroot :: MML Exp
-kroot = pInTags "mroot" (EBinary "\\sqrt" <$> expr <*> expr)
+frac :: Element -> MML Exp
+frac e = do
+  cs <- checkArgs 2 e
+  EBinary "\\frac" <$> (expr (cs !! 0))  <*> (expr (cs !! 1))
 
-style :: MML Exp
-style = pInTags "mstyle" maybeRow
+msqrt :: Element -> MML Exp
+msqrt e = do
+  cs <- checkArgs 1 e <|> return ([unode "mrow" (elChildren e)])
+  EUnary "\\sqrt" <$> expr (cs !! 0)
 
-merror :: MML Exp
-merror = pInTags "merror" maybeRow
+kroot :: Element -> MML Exp
+kroot e = do 
+  cs <- checkArgs 2 e 
+  EBinary "\\sqrt" <$> expr (cs !! 0) <*> expr (cs !! 1)
 
-padded :: MML Exp
-padded = pInTags "mpadded" maybeRow
+style :: Element -> MML Exp
+style = row 
 
-phantom :: MML Exp
-phantom = EUnary "\\phantom" <$> pInTags "mphantom" maybeRow
+merror :: Element -> MML Exp
+merror = row
 
-fenced :: MML Exp
-fenced = try $ do
-  TagOpen _ attr <- lookAhead $ pSatisfy (~== TagOpen "mfenced" [])
-  let open = fromMaybe "(" (lookup "open" attr) 
-  let close = fromMaybe ")" (lookup "close" attr) 
-  EDelimited open close <$> pInTags "mfenced" (many expr)
+padded :: Element -> MML Exp
+padded = row
 
-enclosed :: MML Exp
-enclosed = pInTags "menclose" expr
+phantom :: Element -> MML Exp
+phantom e = EUnary "\\phantom" <$> row e
+
+fenced :: Element -> MML Exp
+fenced e = do
+  let open = fromMaybe "(" (findAttrQ "open" e) 
+  let close = fromMaybe ")" (findAttrQ "close" e) 
+  EDelimited open close <$> mapM expr (elChildren e)
+
+enclosed :: Element -> MML Exp
+enclosed = expr
 
 -- Scripts and Limits
 
-sub :: MML Exp
-sub = pInTags "msub" (ESub <$> expr <*> expr)
+sub :: Element -> MML Exp
+sub e = do
+  cs <- checkArgs 2 e 
+  ESub <$> expr (cs !! 0) <*> expr (cs !! 1)
 
-sup :: MML Exp
-sup = pInTags "msup" (ESuper <$> expr <*> expr)
+sup :: Element -> MML Exp
+sup e = do
+  cs <- checkArgs 2 e
+  ESuper <$> expr (cs !! 0) <*> expr (cs !! 1)
 
-subsup :: MML Exp
-subsup = pInTags "msubsup" (ESubsup <$> expr <*> expr <*> expr)
+subsup :: Element -> MML Exp
+subsup e = do
+  cs <- checkArgs 3 e 
+  ESubsup <$> expr (cs !! 0)  <*> expr (cs !! 1) <*> expr (cs !! 2)
 
-under :: MML Exp
-under = pInTags "munder" (EUnder <$> expr <*> expr)
+under :: Element -> MML Exp
+under e = do
+  cs <- checkArgs 2 e
+  EUnder <$> expr (cs !! 0)  <*> expr (cs !! 1)
 
-over :: MML Exp
-over = pInTags "mover" (EOver <$> expr <*> expr)
+over :: Element -> MML Exp
+over e = do
+  cs <- checkArgs 2 e
+  EOver <$> expr (cs !! 0) <*> expr (cs !! 1)
 
-underover :: MML Exp
-underover = pInTags "munderover" (EUnderover <$> expr <*> expr <*> expr)
-
-multi :: MML ()
-multi = () <$ pInTags "mmultiscripts" maybeRow
+underover :: Element -> MML Exp
+underover e = do
+  cs <- checkArgs 3 e
+  EUnderover <$> expr (cs !! 0)  <*> expr (cs !! 1) <*> expr (cs !! 2)
 
 -- Table
 
-table :: MML Exp
-table = try $ do
-  TagOpen _ attr <- lookAhead $ pSatisfy (~== TagOpen "mtable" [])
-  let defAlign = maybe AlignDefault toAlignment (lookup "columnalign" attr)
-  rs <- pInTags "mtable" (many $ (optional pBlank *> tableRow defAlign))
+table :: Element -> MML Exp
+table e = do
+  let defAlign = maybe AlignDefault toAlignment (findAttrQ "columnalign" e)
+  rs <- mapM (tableRow defAlign) (elChildren e)
   let (onlyAligns, exprs) = (map .map) fst &&& (map . map) snd $ rs
   let rs' = map (pad (maximum (map length rs))) exprs
   let aligns = map findAlign (transpose onlyAligns)
@@ -183,61 +184,48 @@ table = try $ do
                     else foldl combine (head xs) (tail xs)
     combine x y = if x == y then x else AlignDefault 
 
-tableRow :: Alignment -> MML [(Alignment, [Exp])]
-tableRow a = try $ do
-  optional pBlank
-  TagOpen _ attr <- lookAhead $ tr 
-  let align = maybe a toAlignment (lookup "columnalign" attr)
-  pInTags "mtr" (many $ (tableCell align)) <|>
-    pInTags "mlabeledtr" (optional pBlank *> pInTags "mtd" expr *> 
-      many (tableCell align))
-        <* optional pBlank
-  where 
-    tr = pSatisfy (~== TagOpen "mtr" []) <|>
-          pSatisfy (~== TagOpen "mlabeledtr" [])  
+tableRow :: Alignment -> Element -> MML [(Alignment, [Exp])]
+tableRow a e = 
+  case name e of
+    "mtr" -> mapM (tableCell align) (elChildren e)
+    "mlabeledtr" -> mapM (tableCell align) (tail $ elChildren e)
+    _ -> Left $ "tableRow " ++ err e
+  where
+    align = maybe a toAlignment (findAttrQ "columnalign" e)
 
-tableCell :: Alignment -> MML (Alignment, [Exp])
-tableCell a = try $ do 
-  optional pBlank
-  TagOpen _ attr <- lookAhead $ pSatisfy (~== TagOpen "mtd" [])
-  let align = maybe a  toAlignment (lookup "columnalign" attr)
-  (,) align <$> pInTags "mtd" (many expr) 
-    <* optional pBlank
-
--- ignored table specific
-
-aligngroup :: MML ()
-aligngroup = () <$ pSelfClosing "maligngroup"
-
-alignmark :: MML ()
-alignmark = () <$ pSelfClosing "malignmark"
-
--- Ignored Elementary Math
-
-elemMath :: [MML ()] 
-elemMath = [stack, sgroup, srow, sline, scarries, scarry, longdiv]
-
-stack, sgroup, srow, sline, scarries, scarry, longdiv :: MML ()
-stack = () <$ pInTags "mstack" expr
-sgroup = () <$ pInTags "msgroup" expr
-srow = () <$ pInTags "msrow" expr
-sline = () <$ pInTags "msline" expr
-scarries = () <$ pInTags "mscarries" expr
-scarry = () <$ pInTags "mscarry" expr
-longdiv = () <$ pInTags "mlongdiv" expr
-
--- Action Elements
-
-action :: MML ()
-action = () <$ pInTags "maction" expr
+tableCell :: Alignment -> Element -> MML (Alignment, [Exp])
+tableCell a e = 
+  case name e of
+    "mtd" -> (,) align <$> mapM expr (elChildren e) 
+    _ -> Left $ "tableCell " ++ err e
+  where
+    align = maybe a toAlignment (findAttrQ "columnalign" e)
 
 -- Utility
 
+nargs :: Int -> [a] -> Bool
+nargs n xs = length xs == n 
+
+onlyText :: [Content] -> [CData]
+onlyText [] = []
+onlyText ((Text c):xs) = c : onlyText xs
+onlyText (CRef s : xs)  = (CData CDataRaw s Nothing) : onlyText xs
+onlyText (_:xs) = onlyText xs
+
+err :: Element -> String
+err e = name e ++ " line: " ++ (show $ elLine e) ++ (show e)
+
+maybeToEither :: e -> Maybe a -> Either e a
+maybeToEither = flip maybe Right . Left
+
+findAttrQ :: String -> Element -> Maybe String
+findAttrQ s = findAttr (QName s Nothing Nothing)
+
+name :: Element -> String
+name (elName -> (QName n _ _)) = n
+
 stripSpaces :: String -> String
 stripSpaces = reverse . (dropWhile isSpace) . reverse . (dropWhile isSpace)
-
-maybeRow :: MML Exp
-maybeRow = try row <|> (EGrouped <$> many expr)
 
 toAlignment :: String -> Alignment
 toAlignment "left" = AlignLeft
@@ -255,53 +243,3 @@ isSpace ' '  = True
 isSpace '\t' = True
 isSpace '\n' = True
 isSpace _    = False
-
-removeComments :: [Tag String] -> [Tag String]
-removeComments [] = [] 
-removeComments (_: TagComment _: xs) = removeComments xs
-removeComments (x:xs) = x: removeComments xs
-
--- Useful combinators taken from Pandoc HTML reader
-
-pAnyString :: MML String
-pAnyString = try $ do 
-  (TagText s) <- pSatisfy isTagText
-  return (stripSpaces s)
-
-pLocation :: MML ()
-pLocation = do
-  (TagPosition r c) <- pSat isTagPosition
-  setPosition $ newPos "input" r c
-
-pSat :: (Tag String -> Bool) -> MML (Tag String)
-pSat f = do
-  pos <- getPosition
-  token show (const pos) (\x -> if f x then Just x else Nothing)
-
-pSatisfy :: (Tag String -> Bool) -> MML (Tag String)
-pSatisfy f = try $ optional pLocation *> pSat f
-
-pAnyTag :: MML (Tag String)
-pAnyTag = pSatisfy (const True)
-
-pSelfClosing :: String 
-             -> MML (Tag String)
-pSelfClosing t = do
-  open <- pSatisfy (~== TagOpen t [])
-  optional $ pSatisfy (~== TagClose t)
-  return open
-
-pInTags :: String -> MML a
-        -> MML a
-pInTags tagtype parser = try $ do
-  pSatisfy (~== TagOpen tagtype [])
-  r <- parser 
-  pSatisfy (~== TagClose tagtype)
-  return r
-
-pBlank :: MML ()
-pBlank = try $ do
-  (TagText str) <- pSatisfy isTagText
-  guard $ all isSpace str
-
-
