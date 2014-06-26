@@ -24,6 +24,7 @@ module Text.TeXMath ( texMathToMathML,
                       texMathToPandoc,
                       mathMLToOMML,
                       mathMLToPandoc,
+                      writeLaTeX, 
                       DisplayType(..) )
 where
 import Text.TeXMath.Parser
@@ -31,6 +32,7 @@ import Text.TeXMath.MathMLParser
 import Text.TeXMath.MathML
 import Text.TeXMath.OMML
 import Text.TeXMath.Pandoc
+import Text.TeXMath.LaTeX
 import Text.TeXMath.Types
 import Text.XML.Light
 import Text.Pandoc.Definition

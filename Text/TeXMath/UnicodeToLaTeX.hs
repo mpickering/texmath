@@ -1,15 +1,21 @@
-module UnicodeToLaTeX (getLaTeX) where
+module Text.TeXMath.UnicodeToLaTeX (getLaTeX) where
 
 import qualified Data.Map as M
 import Numeric
+import Text.TeXMath.Types
+import Data.Char
+import Data.Maybe
+import Control.Applicative
 
-getLaTeX :: Int -> String
-getLaTeX i = maybe "" latex (lookup i recordsMap)
+getLaTeX :: String -> String
+getLaTeX s = fromMaybe "" (concat <$> mapM f s)
+  where
+    f i = latex <$> M.lookup (ord i) recordsMap
 
 recordsMap :: M.Map Int Record
-recordsMap = M.fromList (map r records)
+recordsMap = M.fromList (map f records)
   where
-    f r = (fst . head (readHex $ point r), r)
+    f r = (fst $ head (readHex $ point r), r)
 
 records :: [Record]
 records = [Record {point = "00021", uchar = "!", latex = "!", unicodemath = "\\exclam", cls = "N", category = "mathpunct", requirements = "", comments = "EXCLAMATION MARK"}
