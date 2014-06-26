@@ -16,11 +16,20 @@ module Text.TeXMath.MathMLParser (testRead, parseMathML) where
 import Text.XML.Light hiding (onlyText)
 import Control.Monad
 import Text.TeXMath.Types
+import Text.TeXMath.MMLDict
+import Text.TeXMath.EntityMap
+import qualified Data.Map as M
 import Control.Applicative ((<*>), (<*), (*>), (<$>), (<$), (<|>))
 import Control.Arrow ((&&&))
 import Text.TeXMath.Shared (getTextType)
 import Data.Maybe
 import Data.List (transpose)
+
+dict :: M.Map String Operator
+dict = M.fromList (map (\o -> (oper o, o)) operators)
+
+safeLookup :: String -> Operator
+safeLookup s = fromMaybe (Operator s "" FInfix 0 0 0 ["mathoperator"]) (M.lookup s dict) 
 
 testRead :: String -> IO (Either String [Exp])
 testRead s = parseMathML <$> readFile s 
@@ -69,13 +78,23 @@ getString e = if null s then Left ("getString " ++ (err e)) else Right s
   where s = (stripSpaces . concatMap cdData .  onlyText . elContent) e
 
 ident :: Element -> MML Exp
-ident e =  EIdentifier <$> (getString e <|> Right "")
+ident e =  EIdentifier <$> either (const $ Right "") Right (getString e)
  
 number :: Element -> MML Exp
 number e = ENumber <$> getString e
 
 op :: Element -> MML Exp
-op e = EMathOperator <$> getString e
+op e = do 
+  opDict <- safeLookup <$> getString e
+  let props = properties opDict
+  let stretchy = if ("stretchy" `elem` props) then EStretchy else id
+  let ts = [("accent", ESymbol Accent), ("mathoperator", EMathOperator), 
+            ("fenced", ESymbol Open)]
+  let constructor = fromMaybe (ESymbol Op) (msum $ map (flip lookup ts) props)
+  return $ (stretchy . constructor) (oper opDict)
+  
+             
+  
      
 
 text :: Element -> MML Exp 
@@ -95,8 +114,9 @@ space e = do
 checkArgs :: Int -> Element -> MML [Element]
 checkArgs x e = do
   let cs = elChildren e
-  guard (nargs x cs)
-  return cs
+  if nargs x cs 
+    then return cs 
+    else (Left ("Incorrect number of arguments for " ++ err e))
 
 row :: Element -> MML Exp
 row e = EGrouped <$> mapM expr (elChildren e)
@@ -108,7 +128,7 @@ frac e = do
 
 msqrt :: Element -> MML Exp
 msqrt e = do
-  cs <- checkArgs 1 e <|> return ([unode "mrow" (elChildren e)])
+  cs <- either (const $ Right ([unode "mrow" (elChildren e)])) (Right) (checkArgs 1 e)
   EUnary "\\sqrt" <$> expr (cs !! 0)
 
 kroot :: Element -> MML Exp
@@ -209,8 +229,9 @@ nargs n xs = length xs == n
 onlyText :: [Content] -> [CData]
 onlyText [] = []
 onlyText ((Text c):xs) = c : onlyText xs
-onlyText (CRef s : xs)  = (CData CDataRaw s Nothing) : onlyText xs
+onlyText (CRef s : xs)  = (CData CDataText (fromMaybe s $ getUnicode s) Nothing) : onlyText xs
 onlyText (_:xs) = onlyText xs
+    
 
 err :: Element -> String
 err e = name e ++ " line: " ++ (show $ elLine e) ++ (show e)

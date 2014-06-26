@@ -95,6 +95,9 @@ Library
                          Text.TeXMath.Macros
                          Text.TeXMath.ToUnicode
                          Text.TeXMath.MathMLParser
+                         Text.TeXMath.MMLDict
+                         Text.TeXMath.EntityMap
+                         Text.TeXMath.UnicodeToLaTeX
 
     if impl(ghc >= 6.12)
       Ghc-Options:     -Wall -fno-warn-unused-do-bind

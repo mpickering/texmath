@@ -21,7 +21,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 -}
 
 module Text.TeXMath.Types (Exp(..), TeXSymbolType(..), ArrayLine,
-                           TextType(..), Alignment(..), DisplayType(..))
+                           TextType(..), Alignment(..), DisplayType(..),
+                           Operator(..), FormType(..), Record(..))
 where
 
 import Data.Generics
@@ -78,3 +79,28 @@ data TextType = TextNormal
               | TextBoldFraktur
               | TextSansSerifItalic
               deriving (Show, Ord, Read, Eq, Data, Typeable)
+
+data FormType = FPrefix | FPostfix | FInfix deriving (Show)
+
+type Property = String
+
+data Operator = Operator 
+                  { oper :: String
+                  , description :: String
+                  , form :: FormType
+                  , priority :: Int
+                  , lspace :: Int
+                  , rspace :: Int
+                  , properties :: [Property] } deriving (Show)
+
+  
+data Record = Record { point :: String
+                     , uchar :: String 
+                     , latex :: String
+                     , unicodemath :: String
+                     , cls :: String
+                     , category :: String
+                     , requirements :: String 
+                     , comments :: String 
+                     } deriving (Show)
+                          
