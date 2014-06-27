@@ -14,16 +14,18 @@ module Text.TeXMath.MathMLParser (testRead, parseMathML) where
 
 
 import Text.XML.Light hiding (onlyText)
-import Control.Monad
 import Text.TeXMath.Types
 import Text.TeXMath.MMLDict
 import Text.TeXMath.EntityMap
 import qualified Data.Map as M
-import Control.Applicative ((<*>), (<*), (*>), (<$>), (<$), (<|>))
+import Control.Applicative ((<*>),(<$>))
 import Control.Arrow ((&&&))
 import Text.TeXMath.Shared (getTextType)
 import Data.Maybe
+import Data.Monoid
 import Data.List (transpose)
+import Debug.Trace
+import Control.Monad.Except
 
 dict :: M.Map String Operator
 dict = M.fromList (map (\o -> (oper o, o)) operators)
@@ -35,11 +37,12 @@ testRead :: String -> IO (Either String [Exp])
 testRead s = parseMathML <$> readFile s 
 
 parseMathML :: String -> Either String [Exp]
-parseMathML inp = (:[]) <$> (i >>= expr)
+parseMathML inp = (:[]) <$> (runExcept (i >>= expr))
   where
     i = maybeToEither "Invalid XML" (parseXMLDoc inp)
 
-type MML = Either String 
+type MML = Except String 
+
 
 expr :: Element -> MML Exp
 expr e = 
@@ -74,12 +77,12 @@ expr e =
 -- Tokens
 
 getString :: Element -> MML String
-getString e = if null s then Left ("getString " ++ (err e)) else Right s
+getString e = if null s then throwError ("getString " ++ (err e)) else return s
   where s = (stripSpaces . concatMap cdData .  onlyText . elContent) e
 
 ident :: Element -> MML Exp
-ident e =  EIdentifier <$> either (const $ Right "") Right (getString e)
- 
+ident e =  EIdentifier <$> catchError (getString e) (const $ return "")  
+
 number :: Element -> MML Exp
 number e = ENumber <$> getString e
 
@@ -88,13 +91,19 @@ op e = do
   opDict <- safeLookup <$> getString e
   let props = properties opDict
   let stretchy = if ("stretchy" `elem` props) then EStretchy else id
+  traceShow props (return ())
+  let position = fixity (form opDict)
   let ts = [("accent", ESymbol Accent), ("mathoperator", EMathOperator), 
-            ("fenced", ESymbol Open)]
-  let constructor = fromMaybe (ESymbol Op) (msum $ map (flip lookup ts) props)
+            ("fence", ESymbol position)]
+  let lookups = map (\k -> (fromMaybe (ESymbol Op) k) "a") (map (flip lookup ts) props)
+  let constructor = fromMaybe (ESymbol Op) (getFirst . mconcat $ map (First . flip lookup ts) props)
   return $ (stretchy . constructor) (oper opDict)
   
-             
-  
+fixity :: FormType -> TeXSymbolType
+fixity (FPrefix) = Open
+fixity (FPostfix) = Close
+fixity (FInfix) = Op               
+ 
      
 
 text :: Element -> MML Exp 
@@ -105,7 +114,7 @@ text e = do
 
 space :: Element -> MML Exp
 space e = do
-  let width = fromMaybe "0em" (findAttrQ "width" e)
+  let width = fromMaybe "0.0em" (findAttrQ "width" e)
   return $ ESpace width
 
 -- Layout 
@@ -116,7 +125,7 @@ checkArgs x e = do
   let cs = elChildren e
   if nargs x cs 
     then return cs 
-    else (Left ("Incorrect number of arguments for " ++ err e))
+    else (throwError ("Incorrect number of arguments for " ++ err e))
 
 row :: Element -> MML Exp
 row e = EGrouped <$> mapM expr (elChildren e)
@@ -128,7 +137,7 @@ frac e = do
 
 msqrt :: Element -> MML Exp
 msqrt e = do
-  cs <- either (const $ Right ([unode "mrow" (elChildren e)])) (Right) (checkArgs 1 e)
+  cs <- catchError (checkArgs 1 e) (const $ return ([unode "mrow" (elChildren e)])) 
   EUnary "\\sqrt" <$> expr (cs !! 0)
 
 kroot :: Element -> MML Exp
@@ -209,7 +218,7 @@ tableRow a e =
   case name e of
     "mtr" -> mapM (tableCell align) (elChildren e)
     "mlabeledtr" -> mapM (tableCell align) (tail $ elChildren e)
-    _ -> Left $ "tableRow " ++ err e
+    _ -> throwError $ "tableRow " ++ err e
   where
     align = maybe a toAlignment (findAttrQ "columnalign" e)
 
@@ -217,11 +226,12 @@ tableCell :: Alignment -> Element -> MML (Alignment, [Exp])
 tableCell a e = 
   case name e of
     "mtd" -> (,) align <$> mapM expr (elChildren e) 
-    _ -> Left $ "tableCell " ++ err e
+    _ -> throwError $ "tableCell " ++ err e
   where
     align = maybe a toAlignment (findAttrQ "columnalign" e)
 
 -- Utility
+
 
 nargs :: Int -> [a] -> Bool
 nargs n xs = length xs == n 
@@ -236,8 +246,8 @@ onlyText (_:xs) = onlyText xs
 err :: Element -> String
 err e = name e ++ " line: " ++ (show $ elLine e) ++ (show e)
 
-maybeToEither :: e -> Maybe a -> Either e a
-maybeToEither = flip maybe Right . Left
+maybeToEither :: (MonadError e m) => e -> Maybe a -> m a
+maybeToEither = flip maybe return . throwError
 
 findAttrQ :: String -> Element -> Maybe String
 findAttrQ s = findAttr (QName s Nothing Nothing)
