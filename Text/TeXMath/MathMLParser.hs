@@ -89,20 +89,28 @@ number e = ENumber <$> getString e
 op :: Element -> MML Exp
 op e = do 
   opDict <- safeLookup <$> getString e
-  let props = properties opDict
-  let stretchy = if ("stretchy" `elem` props) then EStretchy else id
-  traceShow props (return ())
-  let position = fixity (form opDict)
+  let props = properties opDict ++ 
+                ["fence" | fenced] ++ ["accent" | accented]
+  let stretchy = if ("stretchy" `elem` props || stretchy) 
+                  then EStretchy else id
+  let position = getPosition (form opDict)
   let ts = [("accent", ESymbol Accent), ("mathoperator", EMathOperator), 
             ("fence", ESymbol position)]
-  let lookups = map (\k -> (fromMaybe (ESymbol Op) k) "a") (map (flip lookup ts) props)
-  let constructor = fromMaybe (ESymbol Op) (getFirst . mconcat $ map (First . flip lookup ts) props)
+  let constructor = 
+    fromMaybe (ESymbol Op) 
+      (getFirst . mconcat $ map (First . flip lookup ts) props)
   return $ (stretchy . constructor) (oper opDict)
+  where 
+    checkAttr v = maybe False (=="true") (findAttr v e)
+    fenced = checkAttr "fence"
+    accented = checkAttr "accent" 
+    stretchy = checkAttr "stretchy"
+    
   
-fixity :: FormType -> TeXSymbolType
-fixity (FPrefix) = Open
-fixity (FPostfix) = Close
-fixity (FInfix) = Op               
+getPosition :: FormType -> TeXSymbolType
+getPosition (FPrefix) = Open
+getPosition (FPostfix) = Close
+getPosition (FInfix) = Op               
  
      
 
@@ -274,3 +282,4 @@ isSpace ' '  = True
 isSpace '\t' = True
 isSpace '\n' = True
 isSpace _    = False
+
