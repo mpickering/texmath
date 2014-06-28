@@ -86,6 +86,8 @@ expr e =
     "munderover" -> underover e
     "mtable" -> table e
     "maction" -> action e
+    "semantics" -> semantics e
+    "annotation-xml" -> annotation e 
     _ -> return $ empty 
   where
     cs = elChildren e
@@ -207,6 +209,20 @@ underover :: Element -> MML Exp
 underover e = do
   [base, below, above] <- mapM expr =<< (checkArgs 3 e)
   return $ EUnderover base below above
+
+-- Other
+
+semantics :: Element -> MML Exp
+semantics e = EGrouped <$> mapM expr (elChildren e)
+
+annotation :: Element -> MML Exp
+annotation e = 
+  case findAttrQ "encoding" e of 
+    Just "application/mathml-presentation+xml" -> 
+      EGrouped <$> mapM expr (elChildren e)
+    Just "MathML-Presentation" -> 
+      EGrouped <$> mapM expr (elChildren e)
+    _ -> return empty
 
 -- Table
 
