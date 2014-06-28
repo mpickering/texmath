@@ -28,7 +28,7 @@ records = [Record {point = "00021", uchar = "!", latex = "!", unicodemath = "\\e
   , Record {point = "0002A", uchar = "*", latex = "*", unicodemath = "", cls = "N", category = "mathord", requirements = "", comments = "# \\ast, (high) ASTERISK, star"}
   , Record {point = "0002B", uchar = "+", latex = "+", unicodemath = "\\plus", cls = "V", category = "mathbin", requirements = "", comments = "PLUS SIGN"}
   , Record {point = "0002C", uchar = ",", latex = ",", unicodemath = "\\comma", cls = "P", category = "mathpunct", requirements = "", comments = "COMMA"}
-  , Record {point = "0002D", uchar = "-", latex = "", unicodemath = "", cls = "N", category = "mathbin", requirements = "", comments = "t -, HYPHEN-MINUS (deprecated for math)"}
+  , Record {point = "0002D", uchar = "-", latex = "-", unicodemath = "-", cls = "N", category = "mathbin", requirements = "", comments = "t -, HYPHEN-MINUS (deprecated for math)"}
   , Record {point = "0002E", uchar = ".", latex = ".", unicodemath = "\\period", cls = "P", category = "mathalpha", requirements = "", comments = "FULL STOP, period"}
   , Record {point = "0002F", uchar = "/", latex = "/", unicodemath = "\\mathslash", cls = "B", category = "mathord", requirements = "", comments = "# \\slash, SOLIDUS"}
   , Record {point = "00030", uchar = "0", latex = "0", unicodemath = "", cls = "N", category = "mathord", requirements = "", comments = "DIGIT ZERO"}
