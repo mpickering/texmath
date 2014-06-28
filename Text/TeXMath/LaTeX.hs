@@ -14,21 +14,33 @@ writeLaTeX t es = concatMap writeExp es
 writeExp :: Exp -> String
 writeExp (ENumber s) = getLaTeX s
 writeExp (EGrouped es) = concatMap writeExp es
-writeExp (EDelimited open close es) = "\\left"++getLaTeX open ++ concat (intersperse "," (map writeExp es)) ++ "\\right" ++ getLaTeX close
+writeExp (EDelimited open close es) = 
+  "\\left" ++ 
+  getLaTeX open ++ 
+  concat (intersperse "," (map writeExp es)) ++ 
+  "\\right" ++ 
+  getLaTeX close
 writeExp (EIdentifier s) = inBraces $ getLaTeX s
-writeExp o@(EMathOperator s) = fromMaybe (getLaTeX s) (findOperator o)
+writeExp o@(EMathOperator s) = 
+  fromMaybe ("\\operatorname" ++ (inBraces $ getLaTeX s)) (findOperator o)
 writeExp (ESymbol _ s) = getLaTeX s
 writeExp (ESpace width) = S.getSpaceCommand width 
 writeExp (EBinary s e1 e2) = s ++ (evalInBraces e1) ++ (evalInBraces e2)
-writeExp (ESub b e1) = writeExp b ++ "_" ++ (evalInBraces e1) 
-writeExp (ESuper b e1) = writeExp b ++ "^" ++ (evalInBraces e1)  
-writeExp (ESubsup b e1 e2) = writeExp b ++ "_" ++ (evalInBraces e1) ++ "^" ++ (evalInBraces e2)  
-writeExp (EOver b e1) = writeExp b ++ "^_" ++ (evalInBraces e1) 
-writeExp (EUnder b e1) = writeExp b ++ "_" ++ (evalInBraces e1)  
-writeExp (EUnderover b e1 e2) = writeExp b ++ "_" ++ (evalInBraces e1) ++ "^" ++ (evalInBraces e2)
-writeExp (EUp b e1) = writeExp b ++ "^" ++ (evalInBraces e1) 
-writeExp (EDown b e1) = writeExp b ++ "_" ++ (evalInBraces e1) 
-writeExp (EDownup b e1 e2) = writeExp b ++ "_" ++ (evalInBraces e1) ++ "^" ++ evalInBraces e2
+writeExp (ESub b e1) = under b e1 
+writeExp (ESuper b e1) = over b e1  
+writeExp (ESubsup b e1 e2) = underOver b e1 e2  
+writeExp (EOver b e1) = 
+  case e1 of 
+    (ESymbol Accent a) -> fromMaybe "" (S.getDiacriticalCommand a) ++ evalInBraces b
+    _ ->  over b e1 
+writeExp (EUnder b e1) = 
+  case e1 of 
+    (ESymbol Accent a) -> fromMaybe "" (S.getDiacriticalCommand a) ++ evalInBraces b
+    _ ->  under b e1 
+writeExp (EUnderover b e1 e2) = underOver b e1 e2
+writeExp (EUp b e1) = over b e1
+writeExp (EDown b e1) = under b e1 
+writeExp (EDownup b e1 e2) = underOver b e1 e2
 writeExp (EUnary s e) = s ++ evalInBraces e
 writeExp (EScaled size e) = fromMaybe "" (S.getScalerCommand size) ++ evalInBraces e
 writeExp (EStretchy (ESymbol Open e)) = "\\left" ++ getLaTeX e
@@ -36,12 +48,7 @@ writeExp (EStretchy (ESymbol Close e)) = "\\right" ++ getLaTeX e
 writeExp (EStretchy e) = writeExp e
 writeExp (EArray aligns rows) = table aligns rows
 writeExp (EText ttype s) = S.getLaTeXTextCommand ttype ++ inBraces s
-
-evalInBraces :: Exp -> String
-evalInBraces = inBraces . writeExp
-
-inBraces :: String -> String
-inBraces s = "{" ++ s ++ "}"
+    
 
 table :: [Alignment] -> [ArrayLine] -> String
 table as rows = "\\begin{array}" ++ inBraces columnAligns ++ "\n" ++ concatMap row rows ++ "\\end{array}"
@@ -57,6 +64,25 @@ row cells = (concat  (intersperse " & " (map cell cells))) ++ " \\\\\n"
   where 
     cell es = concatMap writeExp es
 
+-- Utility 
+
+under :: Exp -> Exp -> String
+under = bin "_"
+
+over :: Exp -> Exp -> String
+over = bin "^"
+
+underOver :: Exp -> Exp -> Exp -> String
+underOver b e1 e2 = bin "_" b e1 ++ "^" ++ evalInBraces e2
+
+bin :: String -> Exp -> Exp -> String
+bin s b e = writeExp b ++ s ++ evalInBraces e
+
+evalInBraces :: Exp -> String
+evalInBraces = inBraces . writeExp
+
+inBraces :: String -> String
+inBraces s = "{" ++ s ++ "}"
 
 -- Operator Table
 
