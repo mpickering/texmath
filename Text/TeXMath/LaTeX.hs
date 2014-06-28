@@ -4,9 +4,7 @@ import Text.TeXMath.Types
 import Data.List (intersperse)
 import Text.TeXMath.UnicodeToLaTeX
 import qualified Text.TeXMath.Shared as S
-import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
-import Debug.Trace
 
 writeLaTeX :: DisplayType -> [Exp] -> String
 writeLaTeX t es = concatMap writeExp es
