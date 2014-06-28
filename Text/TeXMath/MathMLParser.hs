@@ -12,7 +12,6 @@ Unimplemented
   -}
 module Text.TeXMath.MathMLParser (testRead, parseMathML) where
 
-
 import Text.XML.Light hiding (onlyText)
 import Text.TeXMath.Types
 import Text.TeXMath.MMLDict
@@ -43,7 +42,6 @@ parseMathML inp = (:[]) <$> (runExcept (i >>= expr))
 
 type MML = Except String 
 
-
 expr :: Element -> MML Exp
 expr e = 
   case name e of
@@ -70,6 +68,7 @@ expr e =
     "mover" -> over e
     "munderover" -> underover e
     "mtable" -> table e
+    "maction" -> action e
     _ -> return $ EGrouped []
   where
     cs = elChildren e
@@ -90,30 +89,27 @@ op :: Element -> MML Exp
 op e = do 
   opDict <- safeLookup <$> getString e
   let props = properties opDict ++ 
-                ["fence" | fenced] ++ ["accent" | accented]
-  let stretchy = if ("stretchy" `elem` props || stretchy) 
+                ["fence" | fencedAttr] ++ ["accent" | accented]
+  let stretchCons = if ("stretchy" `elem` props || stretchy) 
                   then EStretchy else id
   let position = getPosition (form opDict)
   let ts = [("accent", ESymbol Accent), ("mathoperator", EMathOperator), 
             ("fence", ESymbol position)]
   let constructor = 
-    fromMaybe (ESymbol Op) 
-      (getFirst . mconcat $ map (First . flip lookup ts) props)
-  return $ (stretchy . constructor) (oper opDict)
+        fromMaybe (ESymbol Op) 
+          (getFirst . mconcat $ map (First . flip lookup ts) props)
+  return $ (stretchCons . constructor) (oper opDict)
   where 
-    checkAttr v = maybe False (=="true") (findAttr v e)
-    fenced = checkAttr "fence"
+    checkAttr v = maybe False (=="true") (findAttrQ v e)
+    fencedAttr = checkAttr "fence"
     accented = checkAttr "accent" 
     stretchy = checkAttr "stretchy"
     
-  
 getPosition :: FormType -> TeXSymbolType
 getPosition (FPrefix) = Open
 getPosition (FPostfix) = Close
 getPosition (FInfix) = Op               
  
-     
-
 text :: Element -> MML Exp 
 text e = do
   let textStyle = maybe TextNormal getTextType 
@@ -126,7 +122,6 @@ space e = do
   return $ ESpace width
 
 -- Layout 
-
 
 checkArgs :: Int -> Element -> MML [Element]
 checkArgs x e = do
@@ -174,6 +169,11 @@ fenced e = do
 enclosed :: Element -> MML Exp
 enclosed = expr
 
+action :: Element -> MML Exp
+action e = 
+  let selection = maybe 1 read (findAttrQ "selction" e) in
+  expr =<< maybeToEither ("Selection out of range") (listToMaybe $ drop ((traceShow (selection) (selection)) - 1) (elChildren e))
+
 -- Scripts and Limits
 
 sub :: Element -> MML Exp
@@ -218,7 +218,7 @@ table e = do
   return $ EArray aligns rs'
   where
     findAlign xs = if null xs then AlignDefault
-                    else foldl combine (head xs) (tail xs)
+                    else foldl1 combine xs
     combine x y = if x == y then x else AlignDefault 
 
 tableRow :: Alignment -> Element -> MML [(Alignment, [Exp])]
@@ -240,7 +240,6 @@ tableCell a e =
 
 -- Utility
 
-
 nargs :: Int -> [a] -> Bool
 nargs n xs = length xs == n 
 
@@ -250,7 +249,6 @@ onlyText ((Text c):xs) = c : onlyText xs
 onlyText (CRef s : xs)  = (CData CDataText (fromMaybe s $ getUnicode s) Nothing) : onlyText xs
 onlyText (_:xs) = onlyText xs
     
-
 err :: Element -> String
 err e = name e ++ " line: " ++ (show $ elLine e) ++ (show e)
 
