@@ -136,7 +136,14 @@ row e = EGrouped <$> mapM expr (elChildren e)
 frac :: Element -> MML Exp
 frac e = do
   cs <- checkArgs 2 e
-  EBinary "\\frac" <$> (expr (cs !! 0))  <*> (expr (cs !! 1))
+  let constructor = maybe "\\frac" (\l -> "\\genfrac{}{}{" ++ thicknessToNum l ++ "}") (findAttrQ "linethickness" e)
+  EBinary constructor <$> (expr (cs !! 0))  <*> (expr (cs !! 1))
+
+thicknessToNum :: String -> String
+thicknessToNum "thin" = "0.05mm"
+thicknessToNum "medium" = ""
+thicknessToNum "thick" = "0.3mm"
+thicknessToNum v = processLength v
 
 msqrt :: Element -> MML Exp
 msqrt e = do
@@ -281,3 +288,17 @@ isSpace '\t' = True
 isSpace '\n' = True
 isSpace _    = False
 
+processLength :: String -> String 
+processLength s = show (n * (unitToLaTeX unit)) ++ "mm"
+  where 
+    ((n, unit): _) = reads s :: [(Float, String)]
+
+unitToLaTeX :: String -> Float
+unitToLaTeX "pt" = 2.84
+unitToLaTeX "mm" = 1
+unitToLaTeX "cm" = 10
+unitToLaTeX "in" = 25.4
+unitToLaTeX "ex" = 1.51
+unitToLaTeX "em" = 3.51 
+unitToLaTeX "mu" = 18 * unitToLaTeX "em"
+unitToLaTeX _    = 1
