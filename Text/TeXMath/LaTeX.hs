@@ -3,9 +3,10 @@ module Text.TeXMath.LaTeX (writeLaTeX) where
 import Text.TeXMath.Types
 import Data.List (intersperse)
 import Text.TeXMath.UnicodeToLaTeX
-import Text.TeXMath.Shared
+import qualified Text.TeXMath.Shared as S
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
+import Debug.Trace
 
 writeLaTeX :: DisplayType -> [Exp] -> String
 writeLaTeX t es = concatMap writeExp es
@@ -17,7 +18,7 @@ writeExp (EDelimited open close es) = "\\left"++getLaTeX open ++ concat (intersp
 writeExp (EIdentifier s) = inBraces $ getLaTeX s
 writeExp o@(EMathOperator s) = fromMaybe (getLaTeX s) (findOperator o)
 writeExp (ESymbol _ s) = getLaTeX s
-writeExp (ESpace width) = getSpaceCommand width 
+writeExp (ESpace width) = S.getSpaceCommand width 
 writeExp (EBinary s e1 e2) = s ++ (evalInBraces e1) ++ (evalInBraces e2)
 writeExp (ESub b e1) = writeExp b ++ "_" ++ (evalInBraces e1) 
 writeExp (ESuper b e1) = writeExp b ++ "^" ++ (evalInBraces e1)  
@@ -29,12 +30,12 @@ writeExp (EUp b e1) = writeExp b ++ "^" ++ (evalInBraces e1)
 writeExp (EDown b e1) = writeExp b ++ "_" ++ (evalInBraces e1) 
 writeExp (EDownup b e1 e2) = writeExp b ++ "_" ++ (evalInBraces e1) ++ "^" ++ evalInBraces e2
 writeExp (EUnary s e) = s ++ evalInBraces e
-writeExp (EScaled size e) = ""
+writeExp (EScaled size e) = fromMaybe "" (S.getScalerCommand size) ++ evalInBraces e
 writeExp (EStretchy (ESymbol Open e)) = "\\left" ++ getLaTeX e
 writeExp (EStretchy (ESymbol Close e)) = "\\right" ++ getLaTeX e
 writeExp (EStretchy e) = writeExp e
 writeExp (EArray aligns rows) = table aligns rows
-writeExp (EText ttype s) = getLaTeXTextCommand ttype ++ inBraces s
+writeExp (EText ttype s) = S.getLaTeXTextCommand ttype ++ inBraces s
 
 evalInBraces :: Exp -> String
 evalInBraces = inBraces . writeExp
@@ -96,6 +97,4 @@ operators =
            , (EMathOperator "sup", "\\sup")
            , (EMathOperator "tan", "\\tan")
            , (EMathOperator "tanh", "\\tanh") ]
-
-
 

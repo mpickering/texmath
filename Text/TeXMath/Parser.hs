@@ -30,6 +30,7 @@ import qualified Text.ParserCombinators.Parsec.Token as P
 import Text.ParserCombinators.Parsec.Language
 import Text.TeXMath.Types
 import Control.Applicative ((<*), (*>), (<$>))
+import qualified Text.TeXMath.Shared as S
 
 type TP = GenParser Char ()
 
@@ -190,7 +191,7 @@ tilRight start = try $ do
 scaledEnclosure :: TP Exp
 scaledEnclosure = try $ do
   cmd <- command
-  case M.lookup cmd scalers of
+  case S.getScalerValue cmd of
        Just  r -> liftM (EScaled r . EStretchy) basicEnclosure
        Nothing -> pzero
 
@@ -406,34 +407,14 @@ parseText [] = []
 diacritical :: TP Exp
 diacritical = try $ do
   c <- command
-  case M.lookup c diacriticals of
-       Just r  -> liftM r texToken
+  case S.getDiacriticalSymbol c of
+       Just r  -> liftM (\e -> 
+                    (if r `elem` under then EUnder else EOver) e (ESymbol Accent r)) 
+                      texToken
        Nothing -> pzero
 
-diacriticals :: M.Map String (Exp -> Exp)
-diacriticals = M.fromList
-               [ ("\\acute", \e -> EOver e (ESymbol Accent "\x00B4"))
-               , ("\\grave", \e -> EOver e (ESymbol Accent "\x0060"))
-               , ("\\breve", \e -> EOver e (ESymbol Accent "\x02D8"))
-               , ("\\check", \e -> EOver e (ESymbol Accent "\x02C7"))
-               , ("\\dot", \e -> EOver e (ESymbol Accent "\x307"))
-               , ("\\ddot", \e -> EOver e (ESymbol Accent "\x308"))
-               , ("\\mathring", \e -> EOver e (ESymbol Accent "\x00B0"))
-               , ("\\vec", \e -> EOver e (ESymbol Accent "\x20D7"))
-               , ("\\overrightarrow", \e -> EOver e (ESymbol Accent "\x20D7"))
-               , ("\\overleftarrow", \e -> EOver e (ESymbol Accent "\x20D6"))
-               , ("\\hat", \e -> EOver e (ESymbol Accent "\x005E"))
-               , ("\\widehat", \e -> EOver e (ESymbol Accent "\x0302"))
-               , ("\\tilde", \e -> EOver e (ESymbol Accent "\x0303"))
-               , ("\\widetilde", \e -> EOver e (ESymbol Accent "\x02DC"))
-               , ("\\bar", \e -> EOver e (ESymbol Accent "\x203E"))
-               , ("\\overbrace", \e -> EOver e (ESymbol Accent "\xFE37"))
-               , ("\\overbracket", \e -> EOver e (ESymbol Accent "\x23B4"))
-               , ("\\overline", \e -> EOver e (ESymbol Accent "\x00AF"))
-               , ("\\underbrace", \e -> EUnder e (ESymbol Accent "\xFE38"))
-               , ("\\underbracket", \e -> EUnder e (ESymbol Accent "\x23B5"))
-               , ("\\underline", \e -> EUnder e (ESymbol Accent "\x00AF"))
-               ]
+under :: [String]
+under = ["\xFE38", "\x23B5", "\x00AF"]
 
 unary :: TP Exp
 unary = try $ do
@@ -512,22 +493,6 @@ brackets = lexeme . P.brackets lexer
 
 binaryOps :: [String]
 binaryOps = ["\\frac", "\\tfrac", "\\dfrac", "\\stackrel", "\\overset", "\\underset", "\\binom"]
-
-scalers :: M.Map String String
-scalers = M.fromList
-          [ ("\\bigg", "2.2")
-          , ("\\Bigg", "2.9")
-          , ("\\big", "1.2")
-          , ("\\Big", "1.6")
-          , ("\\biggr", "2.2")
-          , ("\\Biggr", "2.9")
-          , ("\\bigr", "1.2")
-          , ("\\Bigr", "1.6")
-          , ("\\biggl", "2.2")
-          , ("\\Biggl", "2.9")
-          , ("\\bigl", "1.2")
-          , ("\\Bigl", "1.6")
-          ]
 
 enclosures :: [(String, Exp)]
 enclosures = [ ("(", ESymbol Open "(")

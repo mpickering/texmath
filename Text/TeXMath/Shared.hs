@@ -1,5 +1,5 @@
 module Text.TeXMath.Shared 
-  (getMMLType, getTextType, getSpaceCommand, getLaTeXTextCommand) where
+  (getMMLType, getTextType, getSpaceCommand, getLaTeXTextCommand, getScalerCommand, getScalerValue, getDiacriticalCommand, getDiacriticalSymbol) where
 
 
 import Text.TeXMath.Types
@@ -13,7 +13,6 @@ getMMLType t = fromMaybe "normal" (fst <$> M.lookup t (M.fromList types))
 getLaTeXTextCommand :: TextType -> String
 getLaTeXTextCommand t = fromMaybe "\\mathrm" (snd <$> M.lookup t (M.fromList types))
 
-
 getTextType :: String -> TextType
 getTextType s = fromMaybe TextNormal (M.lookup s revTypes)
   where
@@ -23,6 +22,31 @@ getSpaceCommand :: String -> String
 getSpaceCommand width = snd $ fromMaybe (M.findMax spaceMap) (M.lookupGE width spaceMap)
   where 
     spaceMap = M.fromList (map (\(k, ESpace s) -> (s, k)) spaceCommands)
+
+getScalerCommand :: String -> Maybe String
+getScalerCommand width = (M.lookup width scalerMap)
+  where
+    scalerMap = M.fromList (reverseKeys scalers)
+
+getScalerValue :: String -> Maybe String 
+getScalerValue command = M.lookup command scalerMap
+  where 
+    scalerMap = M.fromList scalers
+
+-- Not sure this behavoir is correct
+getDiacriticalSymbol :: String -> Maybe String 
+getDiacriticalSymbol command = M.lookup command diaMap
+  where
+    diaMap = M.fromList (reverseKeys diacriticals)
+
+getDiacriticalCommand  :: String -> Maybe String
+getDiacriticalCommand symbol = M.lookup symbol diaMap
+  where
+    diaMap = M.fromList diacriticals
+
+
+reverseKeys :: [(a, b)] -> [(b, a)]
+reverseKeys = map (\(k,v) -> (v, k)) 
 
 spaceCommands :: [(String, Exp)]
 spaceCommands = 
@@ -40,7 +64,7 @@ spaceCommands =
 --TextType to (MathML, LaTeX)
 types :: [(TextType, (String, String))]
 types = 
-  [ ( TextNormal       , ("normal", "\\mathrm"))
+  [ ( TextNormal       , ("normal", "\\textrm"))
   , ( TextBold         , ("bold", "\\mathbf"))
   , ( TextItalic       , ("italic","\\mathit"))
   , ( TextMonospace    , ("monospace","\\mathtt"))
@@ -54,4 +78,45 @@ types =
   , ( TextBoldScript          , ("bold-script","\\mathbfscr"))
   , ( TextBoldFraktur         , ("bold-fraktur","\\mathbffrak"))
   , ( TextSansSerifItalic     , ("sans-serif-italic","\\mathsfit")) ]
+
+
+scalers :: [(String, String)]
+scalers = 
+          [ ("\\bigg", "2.2")
+          , ("\\Bigg", "2.9")
+          , ("\\big", "1.2")
+          , ("\\Big", "1.6")
+          , ("\\biggr", "2.2")
+          , ("\\Biggr", "2.9")
+          , ("\\bigr", "1.2")
+          , ("\\Bigr", "1.6")
+          , ("\\biggl", "2.2")
+          , ("\\Biggl", "2.9")
+          , ("\\bigl", "1.2")]
+
+
+diacriticals :: [(String, String)]
+diacriticals = 
+               [ ("\x00B4", "\\acute")
+               , (("\x0060", "\\grave"))
+               , (("\x02D8", "\\breve"))
+               , (("\x02C7", "\\check"))
+               , (("\x307", "\\dot"))
+               , (("\x308", "\\ddot"))
+               , (("\x00B0", "\\mathring"))
+               , (("\x20D7", "\\vec"))
+               , (("\x20D7", "\\overrightarrow"))
+               , (("\x20D6", "\\overleftarrow"))
+               , (("\x005E", "\\hat"))
+               , (("\x0302", "\\widehat"))
+               , (("\x0303", "\\tilde"))
+               , (("\x02DC", "\\widetilde"))
+               , (("\x203E", "\\bar"))
+               , (("\xFE37", "\\overbrace"))
+               , (("\x23B4", "\\overbracket"))
+               , (("\x00AF", "\\overline"))
+               , (("\xFE38", "\\underbrace"))
+               , (("\x23B5", "\\underbracket"))
+               , (("\x00AF", "\\underline"))
+               ]
 
