@@ -1,9 +1,44 @@
-module Text.TeXMath.MMLDict (operators) where
+module Text.TeXMath.MMLDict (getOperator) where
+{-
+Copyright (C) 2014 Matthew Pickering <matthewtpickering@gmail.com>
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+-}
+{- 
+Dictionary of operators to MathML attributes as specified by the MML standard 
+
+The original file can be downloaded from the following link.
+
+http://www.w3.org/TR/xml-entity-names/#source
+-}
 
 import Text.TeXMath.Types
+import qualified Data.Map as M
+import Data.Maybe (fromMaybe)
+
+dict :: M.Map String Operator
+dict = M.fromList (map (\o -> (oper o, o)) operators)
+
+-- Tries to find operator and returns a dummy record indicating a 
+-- math operator if none are found
+getOperator :: String -> Operator
+getOperator s = fromMaybe (Operator s "" FPrefix 0 0 0 ["mathoperator"]) (M.lookup s dict) 
 
 operators :: [Operator]
-operators = [Operator {oper = "!", description = "EXCLAMATION MARK", form = FPostfix, priority = 810, lspace = 1, rspace = 0, properties = []}
+operators = 
+  [ Operator {oper = "!", description = "EXCLAMATION MARK", form = FPostfix, priority = 810, lspace = 1, rspace = 0, properties = []}
   , Operator {oper = "!!", description = "MULTIPLE CHARACTER OPERATOR: !!", form = FPostfix, priority = 810, lspace = 1, rspace = 0, properties = []}
   , Operator {oper = "!=", description = "MULTIPLE CHARACTER OPERATOR: !=", form = FInfix, priority = 260, lspace = 4, rspace = 4, properties = []}
   , Operator {oper = "\"", description = "QUOTATION MARK", form = FPostfix, priority = 880, lspace = 0, rspace = 0, properties = ["accent"]}

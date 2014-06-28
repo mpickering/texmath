@@ -1,39 +1,53 @@
 {-# LANGUAGE ViewPatterns #-}
 {-
+Copyright (C) 2014 Matthew Pickering <matthewtpickering@gmail.com>
 
-Unimplemented 
-  
-  mliteral
-  multi
-  malignmark
-  maligngroup
-  maction
-  Elementary Math
-  -}
-module Text.TeXMath.MathMLParser (testRead, parseMathML) where
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+-}
+{-
+Parses MathML in conformance with the MathML3 specification. 
+
+Unimplemented features
+  - menclose
+  - mstyle 
+  - mpadded
+  - mliteral
+  - mmultiscripts (etc)
+  - malignmark
+  - maligngroup
+  - Elementary Math
+
+To Improve
+  - Handling of menclose
+  - Handling of mstyle
+-}
+
+module Text.TeXMath.MathMLParser (parseMathML) where
 
 import Text.XML.Light hiding (onlyText)
 import Text.TeXMath.Types
-import Text.TeXMath.MMLDict
-import Text.TeXMath.EntityMap
-import qualified Data.Map as M
-import Control.Applicative ((<*>),(<$>))
+import Text.TeXMath.MMLDict (getOperator)
+import Text.TeXMath.EntityMap (getUnicode)
+import Control.Applicative ((<$>))
 import Control.Arrow ((&&&))
 import Text.TeXMath.Shared (getTextType)
-import Data.Maybe
-import Data.Monoid
+import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Monoid (mconcat, First(..), getFirst)
 import Data.List (transpose)
-import Debug.Trace
-import Control.Monad.Except
-
-dict :: M.Map String Operator
-dict = M.fromList (map (\o -> (oper o, o)) operators)
-
-safeLookup :: String -> Operator
-safeLookup s = fromMaybe (Operator s "" FInfix 0 0 0 ["mathoperator"]) (M.lookup s dict) 
-
-testRead :: String -> IO (Either String [Exp])
-testRead s = parseMathML <$> readFile s 
+import Control.Monad.Except ( throwError, catchError
+                            , Except, runExcept, MonadError)
 
 parseMathML :: String -> Either String [Exp]
 parseMathML inp = (:[]) <$> (runExcept (i >>= expr))
@@ -41,6 +55,9 @@ parseMathML inp = (:[]) <$> (runExcept (i >>= expr))
     i = maybeToEither "Invalid XML" (parseXMLDoc inp)
 
 type MML = Except String 
+
+empty :: Exp
+empty = EGrouped []
 
 expr :: Element -> MML Exp
 expr e = 
@@ -55,9 +72,9 @@ expr e =
     "mfrac" -> frac e
     "msqrt" -> msqrt e
     "mroot" -> kroot e
-    "mstyle" -> style e
-    "merror" -> merror e
-    "mpadded" -> padded e
+    "mstyle" -> row e
+    "merror" -> return $ empty
+    "mpadded" -> row e
     "mphantom" -> phantom e
     "mfenced" -> fenced e
     "menclose" -> enclosed e
@@ -69,7 +86,7 @@ expr e =
     "munderover" -> underover e
     "mtable" -> table e
     "maction" -> action e
-    _ -> return $ EGrouped []
+    _ -> return $ empty 
   where
     cs = elChildren e
 
@@ -87,7 +104,7 @@ number e = ENumber <$> getString e
 
 op :: Element -> MML Exp
 op e = do 
-  opDict <- safeLookup <$> getString e
+  opDict <- getOperator <$> getString e
   let props = properties opDict ++ 
                 ["fence" | fencedAttr] ++ ["accent" | accented]
   let stretchCons = if ("stretchy" `elem` props || stretchy) 
@@ -123,46 +140,22 @@ space e = do
 
 -- Layout 
 
-checkArgs :: Int -> Element -> MML [Element]
-checkArgs x e = do
-  let cs = elChildren e
-  if nargs x cs 
-    then return cs 
-    else (throwError ("Incorrect number of arguments for " ++ err e))
-
 row :: Element -> MML Exp
 row e = EGrouped <$> mapM expr (elChildren e)
 
 frac :: Element -> MML Exp
 frac e = do
-  cs <- checkArgs 2 e
+  [num, dom] <- mapM expr =<< (checkArgs 2 e)
   let constructor = maybe "\\frac" (\l -> "\\genfrac{}{}{" ++ thicknessToNum l ++ "}") (findAttrQ "linethickness" e)
-  EBinary constructor <$> (expr (cs !! 0))  <*> (expr (cs !! 1))
-
-thicknessToNum :: String -> String
-thicknessToNum "thin" = "0.05mm"
-thicknessToNum "medium" = ""
-thicknessToNum "thick" = "0.3mm"
-thicknessToNum v = processLength v
+  return $ EBinary constructor num dom
 
 msqrt :: Element -> MML Exp
-msqrt e = do
-  cs <- catchError (checkArgs 1 e) (const $ return ([unode "mrow" (elChildren e)])) 
-  EUnary "\\sqrt" <$> expr (cs !! 0)
+msqrt e = EUnary "\\sqrt" <$> (row e)
 
 kroot :: Element -> MML Exp
 kroot e = do 
-  cs <- checkArgs 2 e 
-  EBinary "\\sqrt" <$> expr (cs !! 0) <*> expr (cs !! 1)
-
-style :: Element -> MML Exp
-style = row 
-
-merror :: Element -> MML Exp
-merror = row
-
-padded :: Element -> MML Exp
-padded = row
+  [base, index] <- mapM expr =<< (checkArgs 2 e)
+  return $ EBinary "\\sqrt" base index
 
 phantom :: Element -> MML Exp
 phantom e = EUnary "\\phantom" <$> row e
@@ -173,45 +166,47 @@ fenced e = do
   let close = fromMaybe ")" (findAttrQ "close" e) 
   EDelimited open close <$> mapM expr (elChildren e)
 
+-- This could approximate the variants better
 enclosed :: Element -> MML Exp
-enclosed = expr
+enclosed = row 
 
 action :: Element -> MML Exp
 action e = 
-  let selection = maybe 1 read (findAttrQ "selction" e) in
-  expr =<< maybeToEither ("Selection out of range") (listToMaybe $ drop ((traceShow (selection) (selection)) - 1) (elChildren e))
+  let selection = maybe 1 read (findAttrQ "selction" e) in -- 1-indexing
+  expr =<< maybeToEither ("Selection out of range") 
+            (listToMaybe $ drop (selection - 1) (elChildren e))
 
 -- Scripts and Limits
 
 sub :: Element -> MML Exp
 sub e = do
-  cs <- checkArgs 2 e 
-  ESub <$> expr (cs !! 0) <*> expr (cs !! 1)
+  [base, subs] <- mapM expr =<< (checkArgs 2 e)
+  return $ ESub base subs
 
 sup :: Element -> MML Exp
 sup e = do
-  cs <- checkArgs 2 e
-  ESuper <$> expr (cs !! 0) <*> expr (cs !! 1)
+  [base, sups] <- mapM expr =<< (checkArgs 2 e)
+  return $ ESuper base sups
 
 subsup :: Element -> MML Exp
 subsup e = do
-  cs <- checkArgs 3 e 
-  ESubsup <$> expr (cs !! 0)  <*> expr (cs !! 1) <*> expr (cs !! 2)
+  [base, subs, sups] <- mapM expr =<< (checkArgs 3 e)
+  return $ ESubsup base subs sups
 
 under :: Element -> MML Exp
 under e = do
-  cs <- checkArgs 2 e
-  EUnder <$> expr (cs !! 0)  <*> expr (cs !! 1)
+  [base, below] <- mapM expr =<< (checkArgs 2 e)
+  return $ EUnder base below
 
 over :: Element -> MML Exp
 over e = do
-  cs <- checkArgs 2 e
-  EOver <$> expr (cs !! 0) <*> expr (cs !! 1)
+  [base, above] <- mapM expr =<< (checkArgs 2 e)
+  return $ EOver base above
 
 underover :: Element -> MML Exp
 underover e = do
-  cs <- checkArgs 3 e
-  EUnderover <$> expr (cs !! 0)  <*> expr (cs !! 1) <*> expr (cs !! 2)
+  [base, below, above] <- mapM expr =<< (checkArgs 3 e)
+  return $ EUnderover base below above
 
 -- Table
 
@@ -246,6 +241,13 @@ tableCell a e =
     align = maybe a toAlignment (findAttrQ "columnalign" e)
 
 -- Utility
+
+checkArgs :: Int -> Element -> MML [Element]
+checkArgs x e = do
+  let cs = elChildren e
+  if nargs x cs 
+    then return cs 
+    else (throwError ("Incorrect number of arguments for " ++ err e))
 
 nargs :: Int -> [a] -> Bool
 nargs n xs = length xs == n 
@@ -287,6 +289,12 @@ isSpace ' '  = True
 isSpace '\t' = True
 isSpace '\n' = True
 isSpace _    = False
+
+thicknessToNum :: String -> String
+thicknessToNum "thin" = "0.05mm"
+thicknessToNum "medium" = ""
+thicknessToNum "thick" = "0.3mm"
+thicknessToNum v = processLength v
 
 processLength :: String -> String 
 processLength s = show (n * (unitToLaTeX unit)) ++ "mm"

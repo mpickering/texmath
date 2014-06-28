@@ -1,13 +1,32 @@
-module Text.TeXMath.LaTeX (writeLaTeX) where 
+{-
+Copyright (C) 2014 Matthew Pickering <matthewtpickering@gmail.com>
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+-}
+
+module Text.TeXMath.LaTeX (toLaTeX) where 
 
 import Text.TeXMath.Types
 import Data.List (intersperse)
-import Text.TeXMath.UnicodeToLaTeX
+import Text.TeXMath.UnicodeToLaTeX (getLaTeX)
 import qualified Text.TeXMath.Shared as S
 import Data.Maybe (fromMaybe)
 
-writeLaTeX :: DisplayType -> [Exp] -> String
-writeLaTeX t es = concatMap writeExp es
+toLaTeX :: [Exp] -> String
+toLaTeX es = concatMap writeExp es 
 
 writeExp :: Exp -> String
 writeExp (ENumber s) = getLaTeX s
@@ -20,7 +39,7 @@ writeExp (EDelimited open close es) =
   getLaTeX close
 writeExp (EIdentifier s) = inBraces $ getLaTeX s
 writeExp o@(EMathOperator s) = 
-  fromMaybe ("\\operatorname" ++ (inBraces $ getLaTeX s)) (findOperator o)
+  fromMaybe ("\\operatorname" ++ (inBraces $ getLaTeX s)) (getOperator o)
 writeExp (ESymbol _ s) = getLaTeX s
 writeExp (ESpace width) = S.getSpaceCommand width 
 writeExp (EBinary s e1 e2) = s ++ (evalInBraces e1) ++ (evalInBraces e2)
@@ -84,8 +103,8 @@ inBraces s = "{" ++ s ++ "}"
 
 -- Operator Table
 
-findOperator :: Exp -> Maybe String
-findOperator = flip lookup operators
+getOperator :: Exp -> Maybe String
+getOperator = flip lookup operators
 
 operators :: [(Exp, String)]
 operators = 
