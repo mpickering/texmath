@@ -40,7 +40,7 @@ import Text.XML.Light hiding (onlyText)
 import Text.TeXMath.Types
 import Text.TeXMath.MMLDict (getOperator)
 import Text.TeXMath.EntityMap (getUnicode)
-import Control.Applicative ((<$>))
+import Control.Applicative ((<$>), (<|>))
 import Control.Arrow ((&&&))
 import Text.TeXMath.Shared (getTextType)
 import Data.Maybe (fromMaybe, listToMaybe)
@@ -48,13 +48,14 @@ import Data.Monoid (mconcat, First(..), getFirst)
 import Data.List (transpose)
 import Control.Monad.Except ( throwError, catchError
                             , Except, runExcept, MonadError)
+import Control.Monad.Reader
 
 parseMathML :: String -> Either String [Exp]
-parseMathML inp = (:[]) <$> (runExcept (i >>= expr))
+parseMathML inp = (:[]) <$> (runExcept (runReaderT (i >>= expr) []))
   where
     i = maybeToEither "Invalid XML" (parseXMLDoc inp)
 
-type MML = Except String 
+type MML = ReaderT [Attr] (Except String)
 
 empty :: Exp
 empty = EGrouped []
@@ -72,7 +73,7 @@ expr e =
     "mfrac" -> frac e
     "msqrt" -> msqrt e
     "mroot" -> kroot e
-    "mstyle" -> row e
+    "mstyle" -> local (elAttribs e ++) (row e)
     "merror" -> return $ empty
     "mpadded" -> row e
     "mphantom" -> phantom e
@@ -106,23 +107,20 @@ number e = ENumber <$> getString e
 
 op :: Element -> MML Exp
 op e = do 
+  env <- ask
   opDict <- getOperator <$> getString e
-  let props = properties opDict ++ 
-                ["fence" | fencedAttr] ++ ["accent" | accented]
-  let stretchCons = if ("stretchy" `elem` props || stretchy) 
+  let props = filter (checkAttr env) (properties opDict) 
+  let stretchCons = if ("stretchy" `elem` props) 
                   then EStretchy else id
   let position = getPosition (form opDict)
-  let ts = [("accent", ESymbol Accent), ("mathoperator", EMathOperator), 
+  let ts =  [("accent", ESymbol Accent), ("mathoperator", EMathOperator), 
             ("fence", ESymbol position)]
   let constructor = 
         fromMaybe (ESymbol Op) 
           (getFirst . mconcat $ map (First . flip lookup ts) props)
   return $ (stretchCons . constructor) (oper opDict)
   where 
-    checkAttr v = maybe False (=="true") (findAttrQ v e)
-    fencedAttr = checkAttr "fence"
-    accented = checkAttr "accent" 
-    stretchy = checkAttr "stretchy"
+    checkAttr env v = maybe True (=="true") (findAttrQ v e <|> lookupAttrQ v env)  
     
 getPosition :: FormType -> TeXSymbolType
 getPosition (FPrefix) = Open
@@ -282,6 +280,9 @@ maybeToEither = flip maybe return . throwError
 
 findAttrQ :: String -> Element -> Maybe String
 findAttrQ s = findAttr (QName s Nothing Nothing)
+
+lookupAttrQ :: String -> [Attr] -> Maybe String
+lookupAttrQ s = lookupAttr (QName s Nothing Nothing)
 
 name :: Element -> String
 name (elName -> (QName n _ _)) = n
