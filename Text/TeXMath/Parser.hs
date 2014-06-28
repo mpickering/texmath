@@ -407,14 +407,10 @@ parseText [] = []
 diacritical :: TP Exp
 diacritical = try $ do
   c <- command
-  case S.getDiacriticalSymbol c of
-       Just r  -> liftM (\e -> 
-                    (if r `elem` under then EUnder else EOver) e (ESymbol Accent r)) 
-                      texToken
+  case S.getDiacriticalCons c of
+       Just r  -> liftM r texToken
        Nothing -> pzero
 
-under :: [String]
-under = ["\xFE38", "\x23B5", "\x00AF"]
 
 unary :: TP Exp
 unary = try $ do

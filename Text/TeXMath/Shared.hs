@@ -1,5 +1,12 @@
 module Text.TeXMath.Shared 
-  (getMMLType, getTextType, getSpaceCommand, getLaTeXTextCommand, getScalerCommand, getScalerValue, getDiacriticalCommand, getDiacriticalSymbol) where
+  ( getMMLType
+  , getTextType
+  , getSpaceCommand
+  , getLaTeXTextCommand
+  , getScalerCommand
+  , getScalerValue
+  , getDiacriticalCommand
+  , getDiacriticalCons) where
 
 
 import Text.TeXMath.Types
@@ -34,10 +41,12 @@ getScalerValue command = M.lookup command scalerMap
     scalerMap = M.fromList scalers
 
 -- Not sure this behavoir is correct
-getDiacriticalSymbol :: String -> Maybe String 
-getDiacriticalSymbol command = M.lookup command diaMap
+getDiacriticalCons :: String -> Maybe (Exp -> Exp)
+getDiacriticalCons command = 
+    f <$> M.lookup command diaMap
   where
     diaMap = M.fromList (reverseKeys diacriticals)
+    f s exp = (if s `elem` under then EUnder else EOver) exp (ESymbol Accent s)
 
 getDiacriticalCommand  :: String -> Maybe String
 getDiacriticalCommand symbol = M.lookup symbol diaMap
@@ -94,6 +103,9 @@ scalers =
           , ("\\Biggl", "2.9")
           , ("\\bigl", "1.2")]
 
+-- Accents which go under the character
+under :: [String]
+under = ["\xFE38", "\x23B5", "\x00AF"]
 
 diacriticals :: [(String, String)]
 diacriticals = 
