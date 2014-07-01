@@ -22,6 +22,7 @@ module Text.TeXMath.LaTeX (toLaTeX) where
 import Text.TeXMath.Types
 import Data.List (intersperse)
 import Text.TeXMath.UnicodeToLaTeX (getLaTeX)
+import Text.TeXMath.Unidecode (getASCII)
 import qualified Text.TeXMath.Shared as S
 import Data.Maybe (fromMaybe)
 import Debug.Trace(traceShow)
@@ -65,7 +66,7 @@ writeExp (EStretchy (ESymbol Open e)) =  getLaTeX e
 writeExp (EStretchy (ESymbol Close e)) =  getLaTeX e
 writeExp (EStretchy e) = writeExp e
 writeExp (EArray aligns rows) = table aligns rows
-writeExp (EText ttype s) = S.getLaTeXTextCommand ttype ++ inBraces s
+writeExp (EText ttype s) = S.getLaTeXTextCommand ttype ++ inBraces (concatMap getASCII s)
     
 
 table :: [Alignment] -> [ArrayLine] -> String

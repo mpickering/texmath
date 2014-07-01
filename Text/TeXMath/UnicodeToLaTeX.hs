@@ -46,6 +46,7 @@ import Data.Char (ord)
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
 import Control.Applicative hiding (optional, (<|>))
 import Text.Parsec
+import Text.TeXMath.Unidecode
 import Debug.Trace 
 
 env :: [String]
@@ -53,18 +54,16 @@ env = ["amsmath", "amssymb"]
 
 -- ugly
 getLaTeX ::  String -> String
-getLaTeX s = fromMaybe (error "Unrep: " ++ s) (concat <$> mapM f s)
+getLaTeX s = concatMap (\x -> fromMaybe (getASCII x) (f x)) s
   where
     f i = do
       v <- M.lookup (ord i) recordsMap
       let r = filter (\s -> head s /= '-') $ (words . requirements)  v
       let Right alts = parse parseComment "" (comments v)
-      let ret = if null r || or (map (`elem` r) env) 
-                then latex v
+      ret <- if null r || or (map (`elem` r) env) 
+                then Just $ latex v
                   else 
-                    case listToMaybe $ catMaybes (map (flip lookup alts) env) of
-                      Just lcmd -> lcmd
-                      Nothing -> error ("Unable to convert: " ++ [i] )
+                    listToMaybe $ catMaybes (map (flip lookup alts) env) 
       case category v of
         "mathaccent" -> return $ (++"{}") ret
         _ -> return $ ret

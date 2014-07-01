@@ -99,6 +99,7 @@ Library
                          Text.TeXMath.EntityMap
                          Text.TeXMath.UnicodeToLaTeX
                          Text.TeXMath.LaTeX
+                         Text.TeXMath.Unidecode
     Other-Modules:       Text.TeXMath.Shared
 
     if impl(ghc >= 6.12)
