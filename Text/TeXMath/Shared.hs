@@ -43,9 +43,11 @@ getTextType s = fromMaybe TextNormal (M.lookup s revTypes)
     revTypes = M.fromList (map (\(k,v) -> (fst v,k)) types)
 
 getSpaceCommand :: String -> String 
-getSpaceCommand width = snd $ fromMaybe (M.findMax spaceMap) (M.lookupGE width spaceMap)
+getSpaceCommand width = snd $ fromMaybe (M.findMax spaceMap) (M.lookupGE (readSpace width) spaceMap)
   where 
-    spaceMap = M.fromList (map (\(k, ESpace s) -> (s, k)) spaceCommands)
+    spaceMap = M.fromList (map (\(k, ESpace s) -> (readSpace s, k)) spaceCommands)
+    readSpace :: String -> Float
+    readSpace s = fst $ head $ reads s
 
 getScalerCommand :: String -> Maybe String
 getScalerCommand width = (M.lookup width scalerMap)
