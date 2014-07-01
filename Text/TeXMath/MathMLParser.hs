@@ -113,7 +113,7 @@ op :: Element -> MML Exp
 op e = do 
   env <- ask
   opDict <- getOperator <$> getString e
-  let props = filter (checkAttr env) (properties opDict) 
+  props <- filterM checkAttr (properties opDict) 
   let stretchCons = if ("stretchy" `elem` props) 
                   then EStretchy else id
   let position = getPosition (form opDict)
@@ -124,7 +124,7 @@ op e = do
           (getFirst . mconcat $ map (First . flip lookup ts) props)
   return $ (stretchCons . constructor) (oper opDict)
   where 
-    checkAttr env v = maybe True (=="true") (findAttrQ v e <|> lookupAttrQ v env)  
+    checkAttr v = maybe True (=="true") <$> findAttrQ v e   
     
 getPosition :: FormType -> TeXSymbolType
 getPosition (FPrefix) = Open
@@ -133,13 +133,14 @@ getPosition (FInfix) = Op
  
 text :: Element -> MML Exp 
 text e = do
-  let textStyle = maybe TextNormal getTextType 
-                    (findAttrQ "mathvariant" e)
+  textStyle <- maybe TextNormal getTextType 
+                <$> (findAttrQ "mathvariant" e)
   EText textStyle <$> getString e 
 
 space :: Element -> MML Exp
 space e = do
-  let width = fromMaybe "0.0em" (findAttrQ "width" e)
+  width <- fromMaybe "0.0em" <$> 
+            (findAttrQ "width" e)
   return $ ESpace width
 
 -- Layout 
@@ -150,7 +151,7 @@ row e = EGrouped <$> mapM expr (elChildren e)
 frac :: Element -> MML Exp
 frac e = do
   [num, dom] <- mapM expr =<< (checkArgs 2 e)
-  let constructor = maybe "\\frac" (\l -> "\\genfrac{}{}{" ++ thicknessToNum l ++ "}") (findAttrQ "linethickness" e)
+  constructor <- maybe "\\frac" (\l -> "\\genfrac{}{}{" ++ thicknessToNum l ++ "}") <$> (findAttrQ "linethickness" e)
   return $ EBinary constructor num dom
 
 msqrt :: Element -> MML Exp
@@ -166,10 +167,10 @@ phantom e = EUnary "\\phantom" <$> row e
 
 fenced :: Element -> MML Exp
 fenced e = do
-  let open  = fromMaybe "(" (findAttrQ "open" e) 
-  let close = fromMaybe ")" (findAttrQ "close" e) 
+  open  <- fromMaybe "(" <$> (findAttrQ "open" e) 
+  close <- fromMaybe ")" <$> (findAttrQ "close" e) 
   let enclosed = not (null open || null close)
-  let sep   = fromMaybe "," (findAttrQ "separators" e)
+  sep   <- fromMaybe "," <$> (findAttrQ "separators" e)
   let expanded = intersperse (unode "mo" sep) (elChildren e)
   case (sep, enclosed) of 
     ("", True) -> EDelimited open close <$> mapM expr (elChildren e)
@@ -187,8 +188,8 @@ enclosed :: Element -> MML Exp
 enclosed = row 
 
 action :: Element -> MML Exp
-action e = 
-  let selection = maybe 1 read (findAttrQ "selction" e) in -- 1-indexing
+action e = do 
+  selection <-  maybe 1 read <$> (findAttrQ "selction" e)  -- 1-indexing
   expr =<< maybeToEither ("Selection out of range") 
             (listToMaybe $ drop (selection - 1) (elChildren e))
 
@@ -230,8 +231,9 @@ semantics :: Element -> MML Exp
 semantics e = EGrouped <$> mapM expr (elChildren e)
 
 annotation :: Element -> MML Exp
-annotation e = 
-  case findAttrQ "encoding" e of 
+annotation e = do 
+  encoding <- findAttrQ "encoding" e
+  case encoding of 
     Just "application/mathml-presentation+xml" -> 
       EGrouped <$> mapM expr (elChildren e)
     Just "MathML-Presentation" -> 
@@ -242,7 +244,7 @@ annotation e =
 
 table :: Element -> MML Exp
 table e = do
-  let defAlign = maybe AlignDefault toAlignment (findAttrQ "columnalign" e)
+  defAlign <- maybe AlignDefault toAlignment <$> (findAttrQ "columnalign" e)
   rs <- mapM (tableRow defAlign) (elChildren e)
   let (onlyAligns, exprs) = (map .map) fst &&& (map . map) snd $ rs
   let rs' = map (pad (maximum (map length rs))) exprs
@@ -254,21 +256,19 @@ table e = do
     combine x y = if x == y then x else AlignDefault 
 
 tableRow :: Alignment -> Element -> MML [(Alignment, [Exp])]
-tableRow a e = 
+tableRow a e = do
+  align <- maybe a toAlignment <$> (findAttrQ "columnalign" e)
   case name e of
     "mtr" -> mapM (tableCell align) (elChildren e)
     "mlabeledtr" -> mapM (tableCell align) (tail $ elChildren e)
     _ -> throwError $ "tableRow " ++ err e
-  where
-    align = maybe a toAlignment (findAttrQ "columnalign" e)
 
 tableCell :: Alignment -> Element -> MML (Alignment, [Exp])
-tableCell a e = 
+tableCell a e = do 
+  align <- maybe a toAlignment <$> (findAttrQ "columnalign" e)
   case name e of
     "mtd" -> (,) align <$> mapM expr (elChildren e) 
     _ -> throwError $ "tableCell " ++ err e
-  where
-    align = maybe a toAlignment (findAttrQ "columnalign" e)
 
 -- Utility
 
@@ -294,8 +294,12 @@ err e = name e ++ " line: " ++ (show $ elLine e) ++ (show e)
 maybeToEither :: (MonadError e m) => e -> Maybe a -> m a
 maybeToEither = flip maybe return . throwError
 
-findAttrQ :: String -> Element -> Maybe String
-findAttrQ s = findAttr (QName s Nothing Nothing)
+findAttrQ :: String -> Element -> MML (Maybe String)
+findAttrQ s e = do 
+  inherit <- asks (lookupAttrQ s)
+  return $
+    findAttr (QName s Nothing Nothing) e
+      <|> inherit 
 
 lookupAttrQ :: String -> [Attr] -> Maybe String
 lookupAttrQ s = lookupAttr (QName s Nothing Nothing)
