@@ -43,17 +43,57 @@ import qualified Data.Map as M
 import Numeric (readHex)
 import Text.TeXMath.Types
 import Data.Char (ord)
-import Data.Maybe (fromMaybe)
-import Control.Applicative ((<$>))
+import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
+import Control.Applicative hiding (optional, (<|>))
+import Text.Parsec
+import Debug.Trace 
 
-getLaTeX :: String -> String
-getLaTeX s = fromMaybe "" (concat <$> mapM f s)
+env :: [String]
+env = ["amsmath", "amssymb"]
+
+-- ugly
+getLaTeX ::  String -> String
+getLaTeX s = fromMaybe (error "Unrep: " ++ s) (concat <$> mapM f s)
   where
-    f i = let v = M.lookup (ord i) recordsMap in
-            case category <$> v of
-              Just "mathaccent" -> (++"{}") . latex <$> v
-              _ -> latex <$> v
+    f i = do
+      v <- M.lookup (ord i) recordsMap
+      let r = filter (\s -> head s /= '-') $ (words . requirements)  v
+      let Right alts = parse parseComment "" (comments v)
+      let ret = if null r || or (map (`elem` r) env) 
+                then latex v
+                  else 
+                    case listToMaybe $ catMaybes (map (flip lookup alts) env) of
+                      Just lcmd -> lcmd
+                      Nothing -> error ("Unable to convert: " ++ [i] )
+      case category v of
+        "mathaccent" -> return $ (++"{}") ret
+        _ -> return $ ret
 
+parseComment :: Parsec String () [(String, String)]
+parseComment  = catMaybes <$> sepBy command (char ',')
+ 
+command :: Parsec String () (Maybe (String, String))
+command = do
+  head <- anyChar
+  case head of 
+    '='-> Just <$> cmd
+    '#'-> Just <$> cmd
+    'x'-> Nothing <$ skip
+    't'-> Nothing <$ skip
+    _ -> Nothing <$ skip 
+
+cmd :: Parsec String () (String, String)
+cmd = do
+  optional spaces
+  cmd <- manyTill anyChar (lookAhead (char ',') <|> space)
+  optional spaces
+  package <- option "" (between (char '(') (char ')') (many1 (notFollowedBy (char ')') *> anyChar)))
+  optional spaces
+  return (package, cmd)
+
+skip :: Parsec String () ()
+skip = skipMany (notFollowedBy (char ',') *> anyChar)
+     
 recordsMap :: M.Map Int Record
 recordsMap = M.fromList (map f records)
   where
