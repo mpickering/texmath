@@ -24,6 +24,7 @@ import Data.List (intersperse)
 import Text.TeXMath.UnicodeToLaTeX (getLaTeX)
 import qualified Text.TeXMath.Shared as S
 import Data.Maybe (fromMaybe)
+import Debug.Trace(traceShow)
 
 toLaTeX :: [Exp] -> String
 toLaTeX es = concatMap writeExp es 
@@ -32,16 +33,16 @@ writeExp :: Exp -> String
 writeExp (ENumber s) = getLaTeX s
 writeExp (EGrouped es) = concatMap writeExp es
 writeExp (EDelimited open close es) = 
-  "\\left" ++ 
+  "\\left" ++
   getLaTeX open ++ 
-  concat (intersperse "," (map writeExp es)) ++ 
-  "\\right" ++ 
+  concatMap writeExp es ++ 
+  "\\right" ++
   getLaTeX close
 writeExp (EIdentifier s) = inBraces $ getLaTeX s
 writeExp o@(EMathOperator s) = 
   fromMaybe ("\\operatorname" ++ (inBraces $ getLaTeX s)) (getOperator o)
 writeExp (ESymbol _ s) = getLaTeX s
-writeExp (ESpace width) = S.getSpaceCommand width 
+writeExp (ESpace width) = " " ++ S.getSpaceCommand width 
 writeExp (EBinary s e1 e2) = s ++ (evalInBraces e1) ++ (evalInBraces e2)
 writeExp (ESub b e1) = under b e1 
 writeExp (ESuper b e1) = over b e1  
@@ -60,8 +61,8 @@ writeExp (EDown b e1) = under b e1
 writeExp (EDownup b e1 e2) = underOver b e1 e2
 writeExp (EUnary s e) = s ++ evalInBraces e
 writeExp (EScaled size e) = fromMaybe "" (S.getScalerCommand size) ++ evalInBraces e
-writeExp (EStretchy (ESymbol Open e)) = "\\left" ++ getLaTeX e
-writeExp (EStretchy (ESymbol Close e)) = "\\right" ++ getLaTeX e
+writeExp (EStretchy (ESymbol Open e)) =  getLaTeX e
+writeExp (EStretchy (ESymbol Close e)) =  getLaTeX e
 writeExp (EStretchy e) = writeExp e
 writeExp (EArray aligns rows) = table aligns rows
 writeExp (EText ttype s) = S.getLaTeXTextCommand ttype ++ inBraces s

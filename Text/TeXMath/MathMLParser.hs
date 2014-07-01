@@ -45,10 +45,11 @@ import Control.Arrow ((&&&))
 import Text.TeXMath.Shared (getTextType)
 import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Monoid (mconcat, First(..), getFirst)
-import Data.List (transpose)
+import Data.List (intersperse, transpose)
 import Control.Monad.Except ( throwError, catchError
                             , Except, runExcept, MonadError)
 import Control.Monad.Reader
+import Debug.Trace
 
 parseMathML :: String -> Either String [Exp]
 parseMathML inp = (:[]) <$> (runExcept (runReaderT (i >>= expr) []))
@@ -162,9 +163,21 @@ phantom e = EUnary "\\phantom" <$> row e
 
 fenced :: Element -> MML Exp
 fenced e = do
-  let open = fromMaybe "(" (findAttrQ "open" e) 
+  let open  = fromMaybe "(" (findAttrQ "open" e) 
   let close = fromMaybe ")" (findAttrQ "close" e) 
-  EDelimited open close <$> mapM expr (elChildren e)
+  let enclosed = not (null open || null close)
+  let sep   = fromMaybe "," (findAttrQ "separators" e)
+  let expanded = intersperse (unode "mo" sep) (elChildren e)
+  case (sep, enclosed) of 
+    ("", True) -> EDelimited open close <$> mapM expr (elChildren e)
+    (s, True)  -> expr $ sepAttr (unode "mfenced" 
+                    (elAttribs e, expanded))
+    (s, False) -> expr $ unode "mrow" 
+                          ([unode "mo" open | not $ null open] ++ 
+                           [unode "mrow" expanded] ++ 
+                           [unode "mo" close | not $ null close])
+  where 
+    sepAttr = add_attr (Attr (unqual "separators") "")
 
 -- This could approximate the variants better
 enclosed :: Element -> MML Exp
