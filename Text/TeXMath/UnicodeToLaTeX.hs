@@ -49,7 +49,10 @@ import Control.Applicative ((<$>))
 getLaTeX :: String -> String
 getLaTeX s = fromMaybe "" (concat <$> mapM f s)
   where
-    f i = latex <$> M.lookup (ord i) recordsMap
+    f i = let v = M.lookup (ord i) recordsMap in
+            case category <$> v of
+              Just "mathaccent" -> (++"{}") . latex <$> v
+              _ -> latex <$> v
 
 recordsMap :: M.Map Int Record
 recordsMap = M.fromList (map f records)
@@ -816,6 +819,8 @@ records = [Record {point = "00021", uchar = "!", latex = "!", unicodemath = "\\e
   , Record {point = "02321", uchar = "\8993", latex = "", unicodemath = "\\intbottom", cls = "G", category = "mathord", requirements = "", comments = "BOTTOM HALF INTEGRAL"}
   , Record {point = "02322", uchar = "\8994", latex = "\\frown", unicodemath = "\\frown", cls = "R", category = "mathrel", requirements = "", comments = "# \\smallfrown, FROWN (down curve)"}
   , Record {point = "02323", uchar = "\8995", latex = "\\smile", unicodemath = "\\smile", cls = "R", category = "mathrel", requirements = "", comments = "# \\smallsmile, SMILE (up curve)"}
+  , Record {point = "02329", uchar = "\9001", latex = "\\langle", unicodemath = "\\langle", cls = "O", category = "mathopen", requirements = "", comments = "LEFT-POINTING ANGLE BRACKET"}
+  , Record {point = "0232A", uchar = "\9002", latex = "\\rangle", unicodemath = "\\rangle", cls = "O", category = "mathopen", requirements = "", comments = "RIGHT-POINTINGLEFT ANGLE BRACKET"}
   , Record {point = "0232C", uchar = "\9004", latex = "", unicodemath = "\\varhexagonlrbonds", cls = "", category = "mathord", requirements = "", comments = "six carbon ring, corner down, double bonds lower right etc"}
   , Record {point = "02332", uchar = "\9010", latex = "", unicodemath = "\\conictaper", cls = "", category = "mathord", requirements = "", comments = "CONICAL TAPER"}
   , Record {point = "02336", uchar = "\9014", latex = "", unicodemath = "\\topbot", cls = "N", category = "mathord", requirements = "", comments = "APL FUNCTIONAL SYMBOL I-BEAM, top and bottom"}
@@ -943,8 +948,8 @@ records = [Record {point = "00021", uchar = "!", latex = "!", unicodemath = "\\e
   , Record {point = "02591", uchar = "\9617", latex = "", unicodemath = "\\blockqtrshaded", cls = "", category = "mathord", requirements = "", comments = "25\\% shaded block"}
   , Record {point = "02592", uchar = "\9618", latex = "", unicodemath = "\\blockhalfshaded", cls = "", category = "mathord", requirements = "", comments = "50\\% shaded block"}
   , Record {point = "02593", uchar = "\9619", latex = "", unicodemath = "\\blockthreeqtrshaded", cls = "", category = "mathord", requirements = "", comments = "75\\% shaded block"}
-  , Record {point = "025A0", uchar = "\9632", latex = "", unicodemath = "\\mdlgblksquare", cls = "N", category = "mathord", requirements = "", comments = "square, filled"}
-  , Record {point = "025A1", uchar = "\9633", latex = "", unicodemath = "\\mdlgwhtsquare", cls = "N", category = "mathord", requirements = "", comments = "square, open"}
+  , Record {point = "025A0", uchar = "\9632", latex = "\\blacksquare", unicodemath = "\\mdlgblksquare", cls = "N", category = "mathord", requirements = "amsmath", comments = "square, filled"}
+  , Record {point = "025A1", uchar = "\9633", latex = "\\square", unicodemath = "\\mdlgwhtsquare", cls = "N", category = "mathord", requirements = "", comments = "square, open"}
   , Record {point = "025A2", uchar = "\9634", latex = "", unicodemath = "\\squoval", cls = "", category = "mathord", requirements = "", comments = "WHITE SQUARE WITH ROUNDED CORNERS"}
   , Record {point = "025A3", uchar = "\9635", latex = "", unicodemath = "\\blackinwhitesquare", cls = "", category = "mathord", requirements = "", comments = "WHITE SQUARE CONTAINING BLACK SMALL SQUARE"}
   , Record {point = "025A4", uchar = "\9636", latex = "", unicodemath = "\\squarehfill", cls = "", category = "mathord", requirements = "", comments = "square, horizontal rule filled"}
