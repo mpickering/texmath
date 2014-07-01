@@ -62,7 +62,10 @@ empty :: Exp
 empty = EGrouped []
 
 expr :: Element -> MML Exp
-expr e = 
+expr e = local (elAttribs e ++) (expr' e)
+
+expr' :: Element -> MML Exp
+expr' e = 
   case name e of
     "math" -> EGrouped <$> (mapM expr cs)
     "mi" -> ident e
@@ -74,7 +77,7 @@ expr e =
     "mfrac" -> frac e
     "msqrt" -> msqrt e
     "mroot" -> kroot e
-    "mstyle" -> local (elAttribs e ++) (row e)
+    "mstyle" -> row e
     "merror" -> return $ empty
     "mpadded" -> row e
     "mphantom" -> phantom e
