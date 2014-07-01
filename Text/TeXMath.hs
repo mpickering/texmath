@@ -65,7 +65,10 @@ mathMLToPandoc dt inp = inp `seq`
 
 mathMLToLaTeX :: DisplayType -> String -> Either String Inline
 mathMLToLaTeX dt inp = inp `seq`
-  Math mathType . toLaTeX <$> parseMathML inp 
+  rt . toLaTeX <$> parseMathML inp 
   where 
     mathType = case dt of { DisplayInline -> InlineMath; 
                             DisplayBlock -> DisplayMath } 
+    rt s = case s of 
+            "" -> Str ""
+            _  -> Math mathType s
