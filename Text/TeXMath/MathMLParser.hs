@@ -21,7 +21,6 @@ Parses MathML in conformance with the MathML3 specification.
 
 Unimplemented features
   - menclose
-  - mstyle 
   - mpadded
   - mliteral
   - mmultiscripts (etc)
@@ -40,10 +39,10 @@ import Text.XML.Light hiding (onlyText)
 import Text.TeXMath.Types
 import Text.TeXMath.MMLDict (getOperator)
 import Text.TeXMath.EntityMap (getUnicode)
-import Control.Applicative ((<$>), (<|>))
+import Control.Applicative ((<$>), (<|>), (<*>))
 import Control.Arrow ((&&&))
 import Text.TeXMath.Shared (getTextType)
-import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Maybe (fromMaybe, listToMaybe, fromJust)
 import Data.Monoid (mconcat, First(..), getFirst)
 import Data.List (intersperse, transpose)
 import Control.Monad.Except ( throwError, catchError
@@ -52,22 +51,37 @@ import Control.Monad.Reader
 import Debug.Trace
 
 parseMathML :: String -> Either String [Exp]
-parseMathML inp = (:[]) <$> (runExcept (runReaderT (i >>= expr) []))
+parseMathML inp = (:[]) <$> (runExcept (runReaderT (i >>= expr) def ))
   where
     i = maybeToEither "Invalid XML" (parseXMLDoc inp)
 
-type MML = ReaderT [Attr] (Except String)
+data MMLState = MMLState { attrs :: [Attr]   
+                         , position :: Maybe FormType }
+ 
+def :: MMLState
+def = MMLState [] Nothing
+
+addAttrs :: [Attr] -> MMLState -> MMLState
+addAttrs as s = s {attrs = as ++ attrs s }
+
+setPosition :: FormType -> MMLState -> MMLState
+setPosition p s = s {position = Just p}
+
+resetPosition :: MMLState -> MMLState
+resetPosition s = s {position = Nothing}
+
+type MML = ReaderT MMLState (Except String)
 
 empty :: Exp
 empty = EGrouped []
 
 expr :: Element -> MML Exp
-expr e = local (elAttribs e ++) (expr' e)
+expr e = local (addAttrs (elAttribs e)) (expr' e)
 
 expr' :: Element -> MML Exp
 expr' e = 
   case name e of
-    "math" -> EGrouped <$> (mapM expr cs)
+    "math" -> row e
     "mi" -> ident e
     "mn" -> number e
     "mo" -> op e
@@ -94,8 +108,16 @@ expr' e =
     "semantics" -> semantics e
     "annotation-xml" -> annotation e 
     _ -> return $ empty 
-  where
-    cs = elChildren e
+
+spacelikeElems, cSpacelikeElems :: [String]
+spacelikeElems = ["mtext", "mspace", "maligngroup", "malignmark"]
+cSpacelikeElems = ["mrow", "mstyle", "mphantom", "mpadded"]
+
+spacelike :: Element -> Bool
+spacelike e@(name -> uid) = 
+  uid `elem` spacelikeElems || uid `elem` cSpacelikeElems &&
+    and (map spacelike (elChildren e))
+
 
 -- Tokens
 
@@ -111,25 +133,32 @@ number e = ENumber <$> getString e
 
 op :: Element -> MML Exp
 op e = do 
-  env <- ask
-  opDict <- getOperator <$> getString e
-  props <- filterM checkAttr (properties opDict) 
+  position <- fromJust <$>  ((<|>) <$> (getFormType <$> findAttrQ "form" e) <*> asks position)
+  opDict <- getOperator <$> getString e <*> return position
+  traceShow opDict (return ())
+  props <- filterM (checkAttr (properties opDict)) ["fence", "accent", "stretchy"]
+  traceShow position (return ())
   let stretchCons = if ("stretchy" `elem` props) 
                   then EStretchy else id
-  let position = getPosition (form opDict)
   let ts =  [("accent", ESymbol Accent), ("mathoperator", EMathOperator), 
-            ("fence", ESymbol position)]
+            ("fence", ESymbol (getPosition position))]
   let constructor = 
         fromMaybe (ESymbol Op) 
           (getFirst . mconcat $ map (First . flip lookup ts) props)
   return $ (stretchCons . constructor) (oper opDict)
   where 
-    checkAttr v = maybe True (=="true") <$> findAttrQ v e   
+    checkAttr ps v = maybe (v `elem` ps) (=="true") <$> findAttrQ v e   
     
 getPosition :: FormType -> TeXSymbolType
 getPosition (FPrefix) = Open
 getPosition (FPostfix) = Close
 getPosition (FInfix) = Op               
+
+getFormType :: Maybe String -> Maybe FormType
+getFormType (Just "infix") = (Just FInfix)
+getFormType (Just "prefix") = (Just FPrefix)
+getFormType (Just "postfix") = (Just FPostfix)
+getFormType _ = Nothing
  
 text :: Element -> MML Exp 
 text e = do
@@ -146,7 +175,20 @@ space e = do
 -- Layout 
 
 row :: Element -> MML Exp
-row e = EGrouped <$> mapM expr (elChildren e)
+row e = EGrouped <$> local resetPosition (row' (elChildren e))
+
+row' :: [Element] -> MML [Exp]
+row' [] = return []
+row' [x] = do 
+              pos <- maybe FInfix (const FPostfix) <$> asks position
+              (:[]) <$> local (setPosition pos) (expr x)
+row' (x:xs) =
+  do 
+    pos <- maybe FPrefix (const FInfix) <$> asks position
+    e  <- local (setPosition pos) (expr x)
+    es <- local (setPosition pos) (row' xs)
+    return (e: es)
+
 
 frac :: Element -> MML Exp
 frac e = do
@@ -296,7 +338,7 @@ maybeToEither = flip maybe return . throwError
 
 findAttrQ :: String -> Element -> MML (Maybe String)
 findAttrQ s e = do 
-  inherit <- asks (lookupAttrQ s)
+  inherit <- asks (lookupAttrQ s . attrs)
   return $
     findAttr (QName s Nothing Nothing) e
       <|> inherit 

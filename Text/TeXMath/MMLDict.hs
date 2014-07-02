@@ -27,14 +27,18 @@ http://www.w3.org/TR/xml-entity-names/#source
 import Text.TeXMath.Types
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
+import Data.Monoid
 
-dict :: M.Map String Operator
-dict = M.fromList (map (\o -> (oper o, o)) operators)
+dict :: M.Map (String, FormType) Operator
+dict = M.fromList (map (\o -> ((oper o, form o), o)) operators)
 
 -- Tries to find operator and returns a dummy record indicating a 
 -- math operator if none are found
-getOperator :: String -> Operator
-getOperator s = fromMaybe (Operator s "" FPrefix 0 0 0 ["mathoperator"]) (M.lookup s dict) 
+getOperator :: String -> FormType -> Operator
+getOperator s p = fromMaybe (Operator s "" p 0 0 0 ["mathoperator"]) ( 
+  getFirst $ mconcat $ map First (map (\x -> M.lookup (s, x) dict) lookupOrder))
+  where
+    lookupOrder = [p, FInfix, FPostfix, FPrefix]
 
 operators :: [Operator]
 operators = 

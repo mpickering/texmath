@@ -80,7 +80,7 @@ data TextType = TextNormal
               | TextSansSerifItalic
               deriving (Show, Ord, Read, Eq, Data, Typeable)
 
-data FormType = FPrefix | FPostfix | FInfix deriving (Show)
+data FormType = FPrefix | FPostfix | FInfix deriving (Show, Ord, Eq)
 
 type Property = String
 
