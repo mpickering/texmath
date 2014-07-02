@@ -126,6 +126,7 @@ scalers =
 under :: [String]
 under = ["\xFE38", "\x23B5", "\x00AF"]
 
+
 diacriticals :: [(String, String)]
 diacriticals = 
                [ ("\x00B4", "\\acute")
@@ -140,14 +141,18 @@ diacriticals =
                , (("\x20D6", "\\overleftarrow"))
                , (("\x005E", "\\hat"))
                , (("\x0302", "\\widehat"))
+               , (("\x02C6", "\\widehat"))
                , (("\x0303", "\\tilde"))
                , (("\x02DC", "\\widetilde"))
                , (("\x203E", "\\bar"))
                , (("\xFE37", "\\overbrace"))
+               , (("\x23DE", "\\overbrace"))
                , (("\x23B4", "\\overbracket"))
                , (("\x00AF", "\\overline"))
                , (("\xFE38", "\\underbrace"))
+               , (("\x23DF", "\\underbrace"))
                , (("\x23B5", "\\underbracket"))
-               , (("\x00AF", "\\underline"))
+               , (("\x0332", "\\underline"))
+               , (("\x0333", "\\underbar"))
                ]
 

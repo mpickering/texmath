@@ -222,7 +222,7 @@ records = [Record {point = "00021", uchar = "!", latex = "!", unicodemath = "\\e
   , Record {point = "00131", uchar = "\305", latex = "\\imath", unicodemath = "", cls = "A", category = "mathalpha", requirements = "-literal", comments = "imath"}
   , Record {point = "001B5", uchar = "\437", latex = "", unicodemath = "\\Zbar", cls = "", category = "mathord", requirements = "", comments = "impedance"}
   , Record {point = "00237", uchar = "\567", latex = "\\jmath", unicodemath = "", cls = "A", category = "mathalpha", requirements = "-literal", comments = "jmath"}
-  , Record {point = "002C6", uchar = "\710", latex = "", unicodemath = "", cls = "D", category = "mathalpha", requirements = "", comments = "circ, alias for 0302"}
+  , Record {point = "002C6", uchar = "\710", latex = "\\hat", unicodemath = "\\hat", cls = "D", category = "mathalpha", requirements = "", comments = "circ, alias for 0302"}
   , Record {point = "002C7", uchar = "\711", latex = "", unicodemath = "", cls = "D", category = "mathalpha", requirements = "", comments = "CARON, alias for 030C"}
   , Record {point = "002D8", uchar = "\728", latex = "", unicodemath = "", cls = "D", category = "mathord", requirements = "", comments = "BREVE, alias for 0306"}
   , Record {point = "002D9", uchar = "\729", latex = "", unicodemath = "", cls = "D", category = "mathord", requirements = "", comments = "dot, alias for 0307"}
