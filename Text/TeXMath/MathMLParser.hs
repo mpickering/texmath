@@ -140,7 +140,6 @@ op e = do
   inferredPosition <- fromJust <$>  ((<|>) <$> (getFormType <$> findAttrQ "form" e) <*> asks position)
   opDict <- getOperator <$> (catchError (getString e) (const $ return "")) <*> return inferredPosition
   props <- filterM (checkAttr (properties opDict)) ["mathoperator", "fence", "accent", "stretchy"]
-  traceShow opDict (return ())
   let position = form opDict
   let stretchCons = if ("stretchy" `elem` props) 
                   then EStretchy else id
