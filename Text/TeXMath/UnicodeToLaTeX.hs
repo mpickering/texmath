@@ -346,6 +346,8 @@ records = [Record {point = "00021", uchar = "!", latex = "!", unicodemath = "\\e
   , Record {point = "02015", uchar = "\8213", latex = "", unicodemath = "\\horizbar", cls = "", category = "mathord", requirements = "", comments = "HORIZONTAL BAR"}
   , Record {point = "02016", uchar = "\8214", latex = "\\|", unicodemath = "\\Vert", cls = "F", category = "mathfence", requirements = "", comments = "= \\Vert, double vertical bar"}
   , Record {point = "02017", uchar = "\8215", latex = "", unicodemath = "\\twolowline", cls = "", category = "mathord", requirements = "", comments = "DOUBLE LOW LINE (spacing)"}
+  , Record {point = "0201C", uchar = "\8220", latex = "``", unicodemath = "``", cls = "O", category = "mathpunct", requirements = "", comments = "Left curly quote" }
+  , Record {point = "0201D", uchar = "\8221", latex = "''", unicodemath = "''", cls = "O", category = "mathpunct", requirements = "", comments = "Right curly quote" }
   , Record {point = "02020", uchar = "\8224", latex = "\\dagger", unicodemath = "\\dagger", cls = "N", category = "mathbin", requirements = "", comments = "DAGGER relation"}
   , Record {point = "02021", uchar = "\8225", latex = "\\ddagger", unicodemath = "\\ddagger", cls = "N", category = "mathbin", requirements = "", comments = "DOUBLE DAGGER relation"}
   , Record {point = "02022", uchar = "\8226", latex = "", unicodemath = "\\smblkcircle", cls = "B", category = "mathbin", requirements = "", comments = "# \\bullet, b: round BULLET, filled"}
