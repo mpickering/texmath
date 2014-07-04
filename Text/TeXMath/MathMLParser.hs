@@ -22,7 +22,6 @@ Parses MathML in conformance with the MathML3 specification.
 Unimplemented features
   - menclose
   - mpadded
-  - mliteral
   - mmultiscripts (etc)
   - malignmark
   - maligngroup
@@ -49,26 +48,19 @@ import Control.Monad.Except ( throwError
                             , Except, runExcept, MonadError)
 import Control.Monad.Reader
 import Debug.Trace
+import Data.Generics (everywhere, mkT)
 
 parseMathML :: String -> Either String [Exp]
-parseMathML inp = (:[]) <$> (runExcept (runReaderT (i >>= expr) def ))
+parseMathML inp = (:[]) . fixTree <$> (runExcept (runReaderT (i >>= expr) def ))
   where
     i = maybeToEither "Invalid XML" (parseXMLDoc inp)
+
+fixTree :: Exp -> Exp
+fixTree = everywhere (mkT fixNesting)
 
 data MMLState = MMLState { attrs :: [Attr]   
                          , position :: Maybe FormType }
  
-def :: MMLState
-def = MMLState [] Nothing
-
-addAttrs :: [Attr] -> MMLState -> MMLState
-addAttrs as s = s {attrs = as ++ attrs s }
-
-setPosition :: FormType -> MMLState -> MMLState
-setPosition p s = s {position = Just p}
-
-resetPosition :: MMLState -> MMLState
-resetPosition s = s {position = Nothing}
 
 type MML = ReaderT MMLState (Except String)
 
@@ -143,16 +135,6 @@ op e = do
   where 
     checkAttr ps v = maybe (v `elem` ps) (=="true") <$> findAttrQ v e   
     
-getPosition :: FormType -> TeXSymbolType
-getPosition (FPrefix) = Open
-getPosition (FPostfix) = Close
-getPosition (FInfix) = Op               
-
-getFormType :: Maybe String -> Maybe FormType
-getFormType (Just "infix") = (Just FInfix)
-getFormType (Just "prefix") = (Just FPrefix)
-getFormType (Just "postfix") = (Just FPostfix)
-getFormType _ = Nothing
  
 text :: Element -> MML Exp 
 text e = do
@@ -337,6 +319,33 @@ tableCell a e = do
     "mtd" -> (,) align <$> mapM expr (elChildren e) 
     _ -> throwError $ "tableCell " ++ err e
 
+-- Fixup
+
+-- See Exception for embellished operators, this only affects stretchy
+
+fixNesting :: Exp -> Exp
+fixNesting (EOver (EStretchy e) s) = EStretchy (EOver e s)
+fixNesting (EUnder (EStretchy e) s) = EStretchy (EUnder e s)
+fixNesting (EUnderover (EStretchy e) s1 s2) = EStretchy (EUnderover e s1 s2)
+fixNesting (ESub (EStretchy e) s) = EStretchy (ESub e s)
+fixNesting (ESuper (EStretchy e) s) = EStretchy (ESuper e s)
+fixNesting (ESubsup (EStretchy e) s1 s2) = EStretchy (ESubsup e s1 s2)
+fixNesting e = e
+
+-- MMLState helper functions
+
+def :: MMLState
+def = MMLState [] Nothing
+
+addAttrs :: [Attr] -> MMLState -> MMLState
+addAttrs as s = s {attrs = as ++ attrs s }
+
+setPosition :: FormType -> MMLState -> MMLState
+setPosition p s = s {position = Just p}
+
+resetPosition :: MMLState -> MMLState
+resetPosition s = s {position = Nothing}
+
 -- Utility
 
 checkArgs :: Int -> Element -> MML [Element]
@@ -382,6 +391,17 @@ toAlignment "left" = AlignLeft
 toAlignment "center" = AlignCenter
 toAlignment "right" = AlignRight
 toAlignment _ = AlignDefault
+
+getPosition :: FormType -> TeXSymbolType
+getPosition (FPrefix) = Open
+getPosition (FPostfix) = Close
+getPosition (FInfix) = Op               
+
+getFormType :: Maybe String -> Maybe FormType
+getFormType (Just "infix") = (Just FInfix)
+getFormType (Just "prefix") = (Just FPrefix)
+getFormType (Just "postfix") = (Just FPostfix)
+getFormType _ = Nothing
 
 pad :: Int -> [[a]] -> [[a]]
 pad n xs = xs ++ (replicate (n - len) [])
