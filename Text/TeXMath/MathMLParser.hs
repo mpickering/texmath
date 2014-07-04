@@ -45,7 +45,7 @@ import Text.TeXMath.Shared (getTextType)
 import Data.Maybe (fromMaybe, listToMaybe, fromJust)
 import Data.Monoid (mconcat, First(..), getFirst)
 import Data.List (intersperse, transpose)
-import Control.Monad.Except ( throwError, catchError
+import Control.Monad.Except ( throwError 
                             , Except, runExcept, MonadError)
 import Control.Monad.Reader
 import Debug.Trace
@@ -123,13 +123,13 @@ spacelike e@(name -> uid) =
 -- Tokens
 
 getString :: Element -> MML String
-getString e = if null s then throwError ("getString " ++ (err e)) else return s
+getString e = return s
   where s = (stripSpaces . concatMap cdData .  onlyText . elContent) e
 
 ident :: Element -> MML Exp
 ident e =  do
   mv <- maybe EIdentifier (EText . getTextType) <$> findAttrQ "mathvariant" e 
-  mv <$> catchError (getString e) (const $ return "")  
+  mv <$> getString e  
   
 
 number :: Element -> MML Exp
@@ -138,7 +138,7 @@ number e = ENumber <$> getString e
 op :: Element -> MML Exp
 op e = do 
   inferredPosition <- fromJust <$>  ((<|>) <$> (getFormType <$> findAttrQ "form" e) <*> asks position)
-  opDict <- getOperator <$> (catchError (getString e) (const $ return "")) <*> return inferredPosition
+  opDict <- getOperator <$> getString e <*> return inferredPosition
   props <- filterM (checkAttr (properties opDict)) ["mathoperator", "fence", "accent", "stretchy"]
   let position = form opDict
   let stretchCons = if ("stretchy" `elem` props) 
