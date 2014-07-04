@@ -376,7 +376,7 @@ records = [Record {point = "00021", uchar = "!", latex = "!", unicodemath = "\\e
   , Record {point = "02005", uchar = "\8197", latex = "", unicodemath = "", cls = "S", category = "", requirements = "", comments = "FOUR-PER-EM SPACE, mid space"}
   , Record {point = "02006", uchar = "\8198", latex = "", unicodemath = "", cls = "S", category = "", requirements = "", comments = "SIX-PER-EM SPACE"}
   , Record {point = "02007", uchar = "\8199", latex = "", unicodemath = "", cls = "S", category = "", requirements = "", comments = "FIGURE SPACE"}
-  , Record {point = "02009", uchar = "\8201", latex = "\\,2", unicodemath = "", cls = "S", category = "", requirements = "", comments = "THIN SPACE"}
+  , Record {point = "02009", uchar = "\8201", latex = "\\,", unicodemath = "", cls = "S", category = "", requirements = "", comments = "THIN SPACE"}
   , Record {point = "0200A", uchar = "\8202", latex = "", unicodemath = "", cls = "S", category = "", requirements = "", comments = "HAIR SPACE"}
   , Record {point = "0200B", uchar = "\8203", latex = "", unicodemath = "", cls = "S", category = "", requirements = "", comments = "# \\hspace{0pt}, zwsp"}
   , Record {point = "02010", uchar = "\8208", latex = "", unicodemath = "", cls = "P", category = "mathord", requirements = "", comments = "HYPHEN (true graphic)"}
