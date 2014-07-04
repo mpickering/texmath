@@ -143,29 +143,36 @@ removeAccentStretch :: Exp -> Exp
 removeAccentStretch (EStretchy e@(ESymbol Accent _)) = e
 removeAccentStretch x = x
 
-reorderDiacritical' :: String -> Exp -> Exp -> Exp 
-reorderDiacritical' def b e@(ESymbol Accent a) = 
-  case S.getDiacriticalCommand a of
+reorderDiacritical' :: Position -> Exp -> Exp -> Exp 
+reorderDiacritical' p b e@(ESymbol Accent a) = 
+  case S.getDiacriticalCommand p a of
     Just accentCmd -> EUnary accentCmd b
     Nothing -> EBinary def e b
+  where
+    def = case p of 
+            Over -> "\\overset"
+            Under -> "\\underset"
 reorderDiacritical' _ _ _ = error "Must be called with Accent"
 
 reorderDiacritical :: Exp -> Exp
-reorderDiacritical (EOver b e@(ESymbol Accent _)) = reorderDiacritical' "\\overset" b e
-reorderDiacritical (EUnder b e@(ESymbol Accent _)) = reorderDiacritical' "\\underset" b e
-reorderDiacritical (EUnderover b e@(ESymbol Accent _) e1) = reorderDiacritical' "\\underset" (EOver b e1) e
-reorderDiacritical (EUnderover b e1 e@(ESymbol Accent _)) = reorderDiacritical' "\\overset" (EUnder b e1) e
+reorderDiacritical (EOver b e@(ESymbol Accent _)) = 
+  reorderDiacritical' Over b e
+reorderDiacritical (EUnder b e@(ESymbol Accent _)) = 
+  reorderDiacritical' Under b e
+reorderDiacritical (EUnderover b e@(ESymbol Accent _) e1) = 
+  reorderDiacritical' Under (EOver b e1) e
+reorderDiacritical (EUnderover b e1 e@(ESymbol Accent _)) = 
+  reorderDiacritical' Over (EUnder b e1) e
 reorderDiacritical x = x
-
 
 matchStretch' :: [Exp] -> Int
 matchStretch'  [] = 0
-matchStretch' (a@(EStretchy (ESymbol Open s)): xs) = let s' = getLaTeX s in 
-                                                      case s' of {"" -> 0; _ -> 1} 
-                                                        + (matchStretch' xs)
-matchStretch' (b@(EStretchy (ESymbol Close s)): xs) = let s' = getLaTeX s in
-                                                       case s' of {"" -> 0; _ -> (-1)} 
-                                                        + (matchStretch' xs)
+matchStretch' (a@(EStretchy (ESymbol Open s)): xs) = 
+  let s' = getLaTeX s in 
+    case s' of {"" -> 0; _ -> 1} + (matchStretch' xs)
+matchStretch' (b@(EStretchy (ESymbol Close s)): xs) = 
+  let s' = getLaTeX s in
+    case s' of {"" -> 0; _ -> (-1)} + (matchStretch' xs)
 matchStretch' (_:xs) = matchStretch' xs
 
 matchStretch :: [Exp] -> [Exp] 

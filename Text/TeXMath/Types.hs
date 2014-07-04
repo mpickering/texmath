@@ -22,7 +22,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 module Text.TeXMath.Types (Exp(..), TeXSymbolType(..), ArrayLine,
                            TextType(..), Alignment(..), DisplayType(..),
-                           Operator(..), FormType(..), Record(..))
+                           Operator(..), FormType(..), Record(..),
+                           Position(..) )
 where
 
 import Data.Generics
@@ -83,6 +84,8 @@ data TextType = TextNormal
 data FormType = FPrefix | FPostfix | FInfix deriving (Show, Ord, Eq)
 
 type Property = String
+
+data Position = Under | Over
 
 data Operator = Operator 
                   { oper :: String

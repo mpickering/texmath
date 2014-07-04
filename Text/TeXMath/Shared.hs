@@ -23,7 +23,8 @@ module Text.TeXMath.Shared
   , getScalerCommand
   , getScalerValue
   , getDiacriticalCommand
-  , getDiacriticalCons) where
+  , getDiacriticalCons
+  ) where
 
 
 import Text.TeXMath.Types
@@ -68,10 +69,18 @@ getDiacriticalCons command =
     diaMap = M.fromList (reverseKeys diacriticals)
     f s e = (if s `elem` under then EUnder else EOver) e (ESymbol Accent s)
 
-getDiacriticalCommand  :: String -> Maybe String
-getDiacriticalCommand symbol = M.lookup symbol diaMap
+
+
+getDiacriticalCommand  :: Position -> String -> Maybe String
+getDiacriticalCommand pos symbol = do
+  command <- M.lookup symbol diaMap
+  let below = command `elem` under
+  case pos of
+    Under -> if below then Just command else Nothing
+    Over -> if not below then Just command else Nothing
   where
     diaMap = M.fromList diacriticals
+
 
 
 reverseKeys :: [(a, b)] -> [(b, a)]
