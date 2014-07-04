@@ -37,24 +37,40 @@ LaTeX Project Public License.
 
 -} 
 
-module Text.TeXMath.UnicodeToLaTeX (getLaTeX) where
+module Text.TeXMath.UnicodeToLaTeX (escapeLaTeX, convertText, getLaTeX) where
 
 import qualified Data.Map as M
 import Numeric (readHex)
 import Text.TeXMath.Types
 import Data.Char (ord)
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
-import Control.Applicative hiding (optional, (<|>))
-import Text.Parsec
+import Control.Applicative hiding (optional)
+import Text.Parsec hiding ((<|>))
 import Text.TeXMath.Unidecode
+import Text.TeXMath.ToUnicode
+import Text.TeXMath.Shared
 import Debug.Trace 
 
 env :: [String]
-env = ["amsmath", "amssymb"]
+env = ["amsmath", "amssymb", ""]
+
+-- Categories which require braces
+commands :: [String]
+commands = ["mathaccent", "mathradical", "mathover", "mathunder"]
+
+escapeLaTeX :: Char -> String
+escapeLaTeX c
+  | c `elem` "#$%&_{}" = "\\" ++ [c] 
+  | c == '~' = "\\textasciitilde"
+  | c == '^' = "\\textasciicircum"
+  | c == '\\' = "\\textbackslash"
+  | otherwise = [c]
 
 -- ugly
 getLaTeX ::  String -> String
-getLaTeX s = concatMap (\x -> fromMaybe (getASCII x) (f x)) s
+getLaTeX s = (concatMap (\x -> let a = getASCII x in 
+                         fromMaybe a -- this will never actually happen 
+                          (f x <|> textConvert x <|> (concat <$> mapM (\x -> padCommand <$> (f x <|> return [x])) a ))) s)
   where
     f i = do
       v <- M.lookup (ord i) recordsMap
@@ -64,9 +80,33 @@ getLaTeX s = concatMap (\x -> fromMaybe (getASCII x) (f x)) s
                 then Just $ latex v
                   else 
                     listToMaybe $ catMaybes (map (flip lookup alts) env) 
-      case category v of
-        "mathaccent" -> return $ (++"{}") ret
-        _ -> return $ ret
+      let ret' = 
+            case category v `elem` commands of
+              True -> ret ++ "{}"
+              False -> ret
+      return $ padCommand ret'
+
+padCommand :: String -> String 
+padCommand s@('\\':_) = s ++ " "
+padCommand s = s 
+
+textConvert :: Char -> Maybe String
+textConvert c = do
+  (ttype, v) <- fromUnicode c 
+  return $ getLaTeXTextCommand ttype ++ "{"++[v]++"}"
+
+
+convertText :: String -> String
+convertText = concatMap getSpaceLaTeX 
+        
+getSpaceLaTeX :: Char -> String 
+getSpaceLaTeX c =  
+  let category = fromMaybe "" (cls <$> M.lookup (ord c) recordsMap) in
+  if ('S' `elem` category) then
+    getLaTeX [c]
+    else
+      concatMap escapeLaTeX (getASCII c)
+        
 
 parseComment :: Parsec String () [(String, String)]
 parseComment  = catMaybes <$> sepBy command (char ',')
@@ -158,7 +198,7 @@ records = [Record {point = "00021", uchar = "!", latex = "!", unicodemath = "\\e
   , Record {point = "0005B", uchar = "[", latex = "\\lbrack", unicodemath = "\\lbrack", cls = "O", category = "mathopen", requirements = "", comments = "LEFT SQUARE BRACKET"}
   , Record {point = "0005C", uchar = "\\", latex = "\\backslash", unicodemath = "\\backslash", cls = "B", category = "mathord", requirements = "", comments = "REVERSE SOLIDUS"}
   , Record {point = "0005D", uchar = "]", latex = "\\rbrack", unicodemath = "\\rbrack", cls = "C", category = "mathclose", requirements = "", comments = "RIGHT SQUARE BRACKET"}
-  , Record {point = "0005E", uchar = "", latex = "\\sphat", unicodemath = "", cls = "N", category = "mathord", requirements = "amsxtra", comments = "CIRCUMFLEX ACCENT, TeX superscript operator"}
+  , Record {point = "0005E", uchar = "", latex = "\\sphat", unicodemath = "", cls = "N", category = "mathord", requirements = "amsxtra", comments = "= \\hat{}, CIRCUMFLEX ACCENT, TeX superscript operator"}
   , Record {point = "0005F", uchar = "_", latex = "\\_", unicodemath = "", cls = "N", category = "mathord", requirements = "", comments = "LOW LINE, TeX subscript operator"}
   , Record {point = "00060", uchar = "`", latex = "", unicodemath = "", cls = "D", category = "mathord", requirements = "", comments = "grave, alias for 0300"}
   , Record {point = "00061", uchar = "a", latex = "a", unicodemath = "", cls = "A", category = "mathalpha", requirements = "-literal", comments = "= \\mathrm{a}, LATIN SMALL LETTER A"}
@@ -222,7 +262,7 @@ records = [Record {point = "00021", uchar = "!", latex = "!", unicodemath = "\\e
   , Record {point = "00131", uchar = "\305", latex = "\\imath", unicodemath = "", cls = "A", category = "mathalpha", requirements = "-literal", comments = "imath"}
   , Record {point = "001B5", uchar = "\437", latex = "", unicodemath = "\\Zbar", cls = "", category = "mathord", requirements = "", comments = "impedance"}
   , Record {point = "00237", uchar = "\567", latex = "\\jmath", unicodemath = "", cls = "A", category = "mathalpha", requirements = "-literal", comments = "jmath"}
-  , Record {point = "002C6", uchar = "\710", latex = "\\hat", unicodemath = "\\hat", cls = "D", category = "mathalpha", requirements = "", comments = "circ, alias for 0302"}
+  , Record {point = "002C6", uchar = "\710", latex = "\\hat{}", unicodemath = "\\hat{}", cls = "D", category = "mathalpha", requirements = "", comments = "circ, alias for 0302"}
   , Record {point = "002C7", uchar = "\711", latex = "", unicodemath = "", cls = "D", category = "mathalpha", requirements = "", comments = "CARON, alias for 030C"}
   , Record {point = "002D8", uchar = "\728", latex = "", unicodemath = "", cls = "D", category = "mathord", requirements = "", comments = "BREVE, alias for 0306"}
   , Record {point = "002D9", uchar = "\729", latex = "", unicodemath = "", cls = "D", category = "mathord", requirements = "", comments = "dot, alias for 0307"}
@@ -336,7 +376,7 @@ records = [Record {point = "00021", uchar = "!", latex = "!", unicodemath = "\\e
   , Record {point = "02005", uchar = "\8197", latex = "", unicodemath = "", cls = "S", category = "", requirements = "", comments = "FOUR-PER-EM SPACE, mid space"}
   , Record {point = "02006", uchar = "\8198", latex = "", unicodemath = "", cls = "S", category = "", requirements = "", comments = "SIX-PER-EM SPACE"}
   , Record {point = "02007", uchar = "\8199", latex = "", unicodemath = "", cls = "S", category = "", requirements = "", comments = "FIGURE SPACE"}
-  , Record {point = "02009", uchar = "\8201", latex = "", unicodemath = "", cls = "S", category = "", requirements = "", comments = "THIN SPACE"}
+  , Record {point = "02009", uchar = "\8201", latex = "\\,2", unicodemath = "", cls = "S", category = "", requirements = "", comments = "THIN SPACE"}
   , Record {point = "0200A", uchar = "\8202", latex = "", unicodemath = "", cls = "S", category = "", requirements = "", comments = "HAIR SPACE"}
   , Record {point = "0200B", uchar = "\8203", latex = "", unicodemath = "", cls = "S", category = "", requirements = "", comments = "# \\hspace{0pt}, zwsp"}
   , Record {point = "02010", uchar = "\8208", latex = "", unicodemath = "", cls = "P", category = "mathord", requirements = "", comments = "HYPHEN (true graphic)"}

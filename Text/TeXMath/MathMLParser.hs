@@ -86,6 +86,7 @@ expr' e =
     "mn" -> number e
     "mo" -> op e
     "mtext" -> text e
+    "ms" -> literal e
     "mspace" -> space e
     "mrow" -> row e
     "mfrac" -> frac e
@@ -126,18 +127,21 @@ getString e = if null s then throwError ("getString " ++ (err e)) else return s
   where s = (stripSpaces . concatMap cdData .  onlyText . elContent) e
 
 ident :: Element -> MML Exp
-ident e =  EIdentifier <$> catchError (getString e) (const $ return "")  
+ident e =  do
+  mv <- maybe EIdentifier (EText . getTextType) <$> findAttrQ "mathvariant" e 
+  mv <$> catchError (getString e) (const $ return "")  
+  
 
 number :: Element -> MML Exp
 number e = ENumber <$> getString e
 
 op :: Element -> MML Exp
 op e = do 
-  position <- fromJust <$>  ((<|>) <$> (getFormType <$> findAttrQ "form" e) <*> asks position)
-  opDict <- getOperator <$> getString e <*> return position
+  inferredPosition <- fromJust <$>  ((<|>) <$> (getFormType <$> findAttrQ "form" e) <*> asks position)
+  opDict <- getOperator <$> (catchError (getString e) (const $ return "")) <*> return inferredPosition
+  props <- filterM (checkAttr (properties opDict)) ["mathoperator", "fence", "accent", "stretchy"]
   traceShow opDict (return ())
-  props <- filterM (checkAttr (properties opDict)) ["fence", "accent", "stretchy"]
-  traceShow position (return ())
+  let position = form opDict
   let stretchCons = if ("stretchy" `elem` props) 
                   then EStretchy else id
   let ts =  [("accent", ESymbol Accent), ("mathoperator", EMathOperator), 
@@ -166,6 +170,13 @@ text e = do
                 <$> (findAttrQ "mathvariant" e)
   EText textStyle <$> getString e 
 
+literal :: Element -> MML Exp
+literal e = do
+  lquote <- fromMaybe "\x201C" <$> findAttrQ "lquote" e
+  rquote <- fromMaybe "\x201D" <$> findAttrQ "rquote" e
+  EText ttype cont <- text e
+  return $ EText ttype (lquote ++ cont ++ rquote)
+
 space :: Element -> MML Exp
 space e = do
   width <- fromMaybe "0.0em" <$> 
@@ -193,7 +204,8 @@ row' (x:xs) =
 frac :: Element -> MML Exp
 frac e = do
   [num, dom] <- mapM expr =<< (checkArgs 2 e)
-  constructor <- maybe "\\frac" (\l -> "\\genfrac{}{}{" ++ thicknessToNum l ++ "}") <$> (findAttrQ "linethickness" e)
+  --constructor <- maybe "\\frac" (\l -> "\\genfrac{}{}{}{" ++ thicknessToNum l ++ "}{}") <$> (findAttrQ "linethickness" e)
+  let constructor = "\\frac"
   return $ EBinary constructor num dom
 
 msqrt :: Element -> MML Exp
@@ -202,7 +214,7 @@ msqrt e = EUnary "\\sqrt" <$> (row e)
 kroot :: Element -> MML Exp
 kroot e = do 
   [base, index] <- mapM expr =<< (checkArgs 2 e)
-  return $ EBinary "\\sqrt" base index
+  return $ EBinary "\\sqrt" index base
 
 phantom :: Element -> MML Exp
 phantom e = EUnary "\\phantom" <$> row e
@@ -212,8 +224,14 @@ fenced e = do
   open  <- fromMaybe "(" <$> (findAttrQ "open" e) 
   close <- fromMaybe ")" <$> (findAttrQ "close" e) 
   let enclosed = not (null open || null close)
-  sep   <- fromMaybe "," <$> (findAttrQ "separators" e)
-  let expanded = intersperse (unode "mo" sep) (elChildren e)
+  sep  <- fromMaybe "," <$> (findAttrQ "separators" e)
+  let expanded = 
+        case sep of
+          "" -> elChildren e
+          _  ->
+            let seps = map (\x -> unode "mo" [x]) sep
+                sepsList = seps ++ repeat (last seps) in
+                fInterleave (elChildren e) (sepsList) 
   case (sep, enclosed) of 
     ("", True) -> EDelimited open close <$> mapM expr (elChildren e)
     (s, True)  -> expr $ sepAttr (unode "mfenced" 
@@ -224,6 +242,12 @@ fenced e = do
                            [unode "mo" close | not $ null close])
   where 
     sepAttr = add_attr (Attr (unqual "separators") "")
+
+--interleave up to end of shorter list 
+fInterleave :: [a] -> [a] -> [a]
+fInterleave [] ys = []
+fInterleave xs [] = []
+fInterleave (x:xs) ys = x : fInterleave ys xs
 
 -- This could approximate the variants better
 enclosed :: Element -> MML Exp

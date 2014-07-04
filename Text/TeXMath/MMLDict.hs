@@ -1146,4 +1146,6 @@ operators =
   , Operator {oper = "\11006", description = "WHITE VERTICAL BAR", form = FInfix, priority = 265, lspace = 3, rspace = 3, properties = []}
   , Operator {oper = "\11007", description = "N-ARY WHITE VERTICAL BAR", form = FPrefix, priority = 330, lspace = 1, rspace = 2, properties = ["symmetric","largeop","movablelimits"]}
   , Operator {oper = "\11077", description = "LEFTWARDS QUADRUPLE ARROW", form = FInfix, priority = 270, lspace = 5, rspace = 5, properties = ["stretchy"]}
-  , Operator {oper = "\11078", description = "RIGHTWARDS QUADRUPLE ARROW", form = FInfix, priority = 270, lspace = 5, rspace = 5, properties = ["stretchy"]}]
+  , Operator {oper = "\11078", description = "RIGHTWARDS QUADRUPLE ARROW", form = FInfix, priority = 270, lspace = 5, rspace = 5, properties = ["stretchy"]}
+  , Operator {oper = "\65079", description = "PRESENTATION FORM FOR VERTICAL LEFT CURLY BRACKET" , form = FInfix, priority = 880, lspace = 0, rspace = 0, properties = ["stretchy", "accent"]}
+  , Operator {oper = "\65080", description = "PRESENTATION FORM FOR VERTICAL RIGHT CURLY BRACKET", form = FInfix, priority = 880, lspace = 0, rspace = 0, properties = ["stretchy", "accent"]}]

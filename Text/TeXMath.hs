@@ -25,7 +25,8 @@ module Text.TeXMath ( texMathToMathML,
                       mathMLToOMML,
                       mathMLToPandoc,
                       mathMLToLaTeX, 
-                      DisplayType(..) )
+                      DisplayType(..),
+                      )
 where
 import Text.TeXMath.Parser
 import Text.TeXMath.MathMLParser
@@ -69,6 +70,4 @@ mathMLToLaTeX dt inp = inp `seq`
   where 
     mathType = case dt of { DisplayInline -> InlineMath; 
                             DisplayBlock -> DisplayMath } 
-    rt s = case s of 
-            "" -> Str ""
-            _  -> Math mathType s
+    rt s = Math mathType s

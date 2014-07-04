@@ -30,6 +30,7 @@ import Text.TeXMath.Types
 import qualified Data.Map as M
 import Data.Maybe
 import Control.Applicative  
+import Debug.Trace
 
 getMMLType :: TextType -> String
 getMMLType t = fromMaybe "normal" (fst <$> M.lookup t (M.fromList types))
@@ -47,7 +48,7 @@ getSpaceCommand width = snd $ fromMaybe (M.findMax spaceMap) (M.lookupGE (readSp
   where 
     spaceMap = M.fromList (map (\(k, ESpace s) -> (readSpace s, k)) spaceCommands)
     readSpace :: String -> Float
-    readSpace s = fst $ head $ reads s
+    readSpace s = maybe 0  fst $ listToMaybe $ reads s 
 
 getScalerCommand :: String -> Maybe String
 getScalerCommand width = (M.lookup width scalerMap)
@@ -92,7 +93,7 @@ spaceCommands =
 --TextType to (MathML, LaTeX)
 types :: [(TextType, (String, String))]
 types = 
-  [ ( TextNormal       , ("normal", "\\textrm"))
+  [ ( TextNormal       , ("normal", "\\mathrm"))
   , ( TextBold         , ("bold", "\\mathbf"))
   , ( TextItalic       , ("italic","\\mathit"))
   , ( TextMonospace    , ("monospace","\\mathtt"))
