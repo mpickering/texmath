@@ -27,7 +27,7 @@ http://www.w3.org/TR/xml-entity-names/#source
 import Text.TeXMath.Types
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
-import Data.Monoid
+import Data.Monoid (First(..), mconcat)
 
 dict :: M.Map (String, FormType) Operator
 dict = M.fromList (map (\o -> ((oper o, form o), o)) operators)

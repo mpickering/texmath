@@ -46,10 +46,9 @@ import Data.Char (ord)
 import Data.Maybe (fromMaybe, catMaybes, listToMaybe)
 import Control.Applicative hiding (optional)
 import Text.Parsec hiding ((<|>))
-import Text.TeXMath.Unidecode
-import Text.TeXMath.ToUnicode
-import Text.TeXMath.Shared
-import Debug.Trace 
+import Text.TeXMath.Unidecode (getASCII)
+import Text.TeXMath.ToUnicode (fromUnicode)
+import qualified Text.TeXMath.Shared as S
 
 env :: [String]
 env = ["amsmath", "amssymb", ""]
@@ -70,11 +69,11 @@ escapeLaTeX c
 getLaTeX ::  String -> String
 getLaTeX s = (concatMap (\x -> let a = getASCII x in 
                          fromMaybe a -- this will never actually happen 
-                          (f x <|> textConvert x <|> (concat <$> mapM (\x -> padCommand <$> (f x <|> return [x])) a ))) s)
+                          (f x <|> textConvert x <|> (concat <$> mapM (\y -> padCommand <$> (f y <|> return [y])) a ))) s)
   where
     f i = do
       v <- M.lookup (ord i) recordsMap
-      let r = filter (\s -> head s /= '-') $ (words . requirements)  v
+      let r = filter (\z -> head z /= '-') $ (words . requirements)  v
       let Right alts = parse parseComment "" (comments v)
       ret <- if null r || or (map (`elem` r) env) 
                 then Just $ latex v
@@ -93,28 +92,26 @@ padCommand s = s
 textConvert :: Char -> Maybe String
 textConvert c = do
   (ttype, v) <- fromUnicode c 
-  return $ getLaTeXTextCommand ttype ++ "{"++[v]++"}"
-
+  return $ S.getLaTeXTextCommand ttype ++ "{"++[v]++"}"
 
 convertText :: String -> String
 convertText = concatMap getSpaceLaTeX 
         
 getSpaceLaTeX :: Char -> String 
 getSpaceLaTeX c =  
-  let category = fromMaybe "" (cls <$> M.lookup (ord c) recordsMap) in
-  if ('S' `elem` category) then
+  let cat = fromMaybe "" (cls <$> M.lookup (ord c) recordsMap) in
+  if ('S' `elem` cat) then
     getLaTeX [c]
     else
       concatMap escapeLaTeX (getASCII c)
         
-
 parseComment :: Parsec String () [(String, String)]
 parseComment  = catMaybes <$> sepBy command (char ',')
  
 command :: Parsec String () (Maybe (String, String))
 command = do
-  head <- anyChar
-  case head of 
+  first <- anyChar
+  case first of 
     '='-> Just <$> cmd
     '#'-> Just <$> cmd
     'x'-> Nothing <$ skip
@@ -124,11 +121,11 @@ command = do
 cmd :: Parsec String () (String, String)
 cmd = do
   optional spaces
-  cmd <- manyTill anyChar (lookAhead (char ',') <|> space)
+  alt <- manyTill anyChar (lookAhead (char ',') <|> space)
   optional spaces
   package <- option "" (between (char '(') (char ')') (many1 (notFollowedBy (char ')') *> anyChar)))
   optional spaces
-  return (package, cmd)
+  return (package, alt)
 
 skip :: Parsec String () ()
 skip = skipMany (notFollowedBy (char ',') *> anyChar)

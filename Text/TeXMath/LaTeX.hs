@@ -21,15 +21,16 @@ module Text.TeXMath.LaTeX (fixTree, toLaTeX) where
 
 import Text.TeXMath.Types
 import Data.List (intersperse)
-import Text.TeXMath.UnicodeToLaTeX (getLaTeX, convertText, escapeLaTeX)
-import Text.TeXMath.Unidecode (getASCII)
+import Text.TeXMath.UnicodeToLaTeX (getLaTeX)
 import qualified Text.TeXMath.Shared as S
 import Data.Maybe (fromMaybe)
-import Debug.Trace(traceShow, traceShowId)
 import Data.Generics (everywhere, mkT)
 
 toLaTeX :: [Exp] -> String
 toLaTeX es = concatMap (writeExp . fixTree) es 
+
+square :: [String]
+square = ["\\sqrt"]
 
 writeExp :: Exp -> String
 writeExp (ENumber s) = getLaTeX s
@@ -46,8 +47,8 @@ writeExp o@(EMathOperator s) =
 writeExp (ESymbol _ s) = getLaTeX s
 writeExp (ESpace width) = " " ++ S.getSpaceCommand width 
 writeExp (EBinary s e1 e2) 
-  | s `elem` square = s ++ (evalInSquare e1) ++ (evalInBraces e2)
-  | otherwise = s ++ (evalInBraces e1) ++ (evalInBraces e2)
+  | s `elem` square = s ++ (evalInSquare e1) ++ (evalInBraces e2) ++ " "
+  | otherwise = s ++ (evalInBraces e1) ++ (evalInBraces e2) ++ " "
 writeExp (ESub b e1) = under b e1 
 writeExp (ESuper b e1) = over b e1  
 writeExp (ESubsup b e1 e2) = underOver b e1 e2  
@@ -68,19 +69,15 @@ writeExp (EDown b e1) = under b e1
 writeExp (EDownup b e1 e2) = underOver b e1 e2
 writeExp (EUnary s e) = s ++ evalInBraces e
 writeExp (EScaled size e) = fromMaybe "" (S.getScalerCommand size) ++ evalInBraces e
-writeExp (EStretchy (ESymbol Open e)) = let e' = getLaTeX e in 
-                                            case e' of {"" -> ""; _ -> "\\left" ++  e' ++ " "}
-writeExp (EStretchy (ESymbol Close e)) = let e' = getLaTeX e in
-                                              case e' of {"" -> ""; _ -> "\\right" ++ e' ++ " "}
+writeExp (EStretchy (ESymbol Open e)) = 
+  let e' = getLaTeX e in 
+    case e' of {"" -> ""; _ -> "\\left" ++  e' ++ " "}
+writeExp (EStretchy (ESymbol Close e)) = 
+  let e' = getLaTeX e in
+    case e' of {"" -> ""; _ -> "\\right" ++ e' ++ " "}
 writeExp (EStretchy e) = writeExp e
 writeExp (EArray aligns rows) = table aligns rows
 writeExp (EText ttype s) = getLaTeXTextCommand ttype ++ inBraces (escapeSpace $ getLaTeX s)
-
-escapeSpace :: String -> String 
-escapeSpace = concatMap (\c -> if c == ' ' then "\\ " else [c]) 
-
-square :: [String]
-square = ["\\sqrt"]
 
 table :: [Alignment] -> [ArrayLine] -> String
 table as rows = "\\begin{array}" ++ inBraces columnAligns ++ "\n" ++ concatMap row rows ++ "\\end{array}"
@@ -113,7 +110,10 @@ getLaTeXTextCommand t
   where
     cmd = S.getLaTeXTextCommand t 
   
+escapeSpace :: String -> String 
+escapeSpace = concatMap (\c -> if c == ' ' then "\\ " else [c]) 
 
+-- Constructors
 
 under :: Exp -> Exp -> String
 under = bin "_"
@@ -138,6 +138,8 @@ around o c s = o ++ s ++ c
 
 evalInSquare :: Exp -> String
 evalInSquare = around "[" "]" . writeExp 
+
+-- Fix up
 
 removeAccentStretch :: Exp -> Exp
 removeAccentStretch (EStretchy e@(ESymbol Accent _)) = e
@@ -167,14 +169,15 @@ reorderDiacritical x = x
 
 matchStretch' :: [Exp] -> Int
 matchStretch'  [] = 0
-matchStretch' (a@(EStretchy (ESymbol Open s)): xs) = 
+matchStretch' ((EStretchy (ESymbol Open s)): xs) = 
   let s' = getLaTeX s in 
     case s' of {"" -> 0; _ -> 1} + (matchStretch' xs)
-matchStretch' (b@(EStretchy (ESymbol Close s)): xs) = 
+matchStretch' ((EStretchy (ESymbol Close s)): xs) = 
   let s' = getLaTeX s in
     case s' of {"" -> 0; _ -> (-1)} + (matchStretch' xs)
 matchStretch' (_:xs) = matchStretch' xs
 
+-- Ensure that the lefts match the rights.
 matchStretch :: [Exp] -> [Exp] 
 matchStretch es 
   | n < 0 = (replicate (0 - n) $ EStretchy (ESymbol Open ".")) ++ es
@@ -220,7 +223,6 @@ operators =
            , (EMathOperator "inf", "\\inf")
            , (EMathOperator "ker", "\\ker")
            , (EMathOperator "lg", "\\lg")
-
            , (EMathOperator "lim", "\\lim")
            , (EMathOperator "liminf", "\\liminf")
            , (EMathOperator "limsup", "\\limsup")

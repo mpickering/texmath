@@ -41,13 +41,12 @@ import Text.TeXMath.EntityMap (getUnicode)
 import Control.Applicative ((<$>), (<|>), (<*>))
 import Control.Arrow ((&&&))
 import Text.TeXMath.Shared (getTextType)
-import Data.Maybe (fromMaybe, listToMaybe, fromJust)
+import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Monoid (mconcat, First(..), getFirst)
-import Data.List (intersperse, transpose)
-import Control.Monad.Except ( throwError 
-                            , Except, runExcept, MonadError)
-import Control.Monad.Reader
-import Debug.Trace
+import Data.List (transpose)
+import Control.Monad (filterM)
+import Control.Monad.Except (throwError, Except, runExcept, MonadError)
+import Control.Monad.Reader (ReaderT, runReaderT, asks, local)
 import Data.Generics (everywhere, mkT)
 
 parseMathML :: String -> Either String [Exp]
@@ -64,8 +63,6 @@ data MMLState = MMLState { attrs :: [Attr]
 
 type MML = ReaderT MMLState (Except String)
 
-empty :: Exp
-empty = EGrouped []
 
 expr :: Element -> MML Exp
 expr e = local (addAttrs (elAttribs e)) (expr' e)
@@ -105,29 +102,29 @@ expr' e =
 
 -- Tokens
 
-getString :: Element -> MML String
-getString e = return s
-  where s = (stripSpaces . concatMap cdData .  onlyText . elContent) e
+empty :: Exp
+empty = EGrouped []
 
 ident :: Element -> MML Exp
 ident e =  do
   mv <- maybe EIdentifier (EText . getTextType) <$> findAttrQ "mathvariant" e 
   mv <$> getString e  
   
-
 number :: Element -> MML Exp
 number e = ENumber <$> getString e
 
 op :: Element -> MML Exp
 op e = do 
-  inferredPosition <- fromJust <$>  ((<|>) <$> (getFormType <$> findAttrQ "form" e) <*> asks position)
+  Just inferredPosition <- (<|>) <$> (getFormType <$> findAttrQ "form" e) 
+                            <*> asks position
   opDict <- getOperator <$> getString e <*> return inferredPosition
-  props <- filterM (checkAttr (properties opDict)) ["mathoperator", "fence", "accent", "stretchy"]
-  let position = form opDict
+  props <- filterM (checkAttr (properties opDict)) 
+            ["mathoperator", "fence", "accent", "stretchy"]
+  let objectPosition = form opDict
   let stretchCons = if ("stretchy" `elem` props) 
-                  then EStretchy else id
+                      then EStretchy else id
   let ts =  [("accent", ESymbol Accent), ("mathoperator", EMathOperator), 
-            ("fence", ESymbol (getPosition position))]
+            ("fence", ESymbol (getPosition objectPosition))]
   let constructor = 
         fromMaybe (ESymbol Op) 
           (getFirst . mconcat $ map (First . flip lookup ts) props)
@@ -135,7 +132,6 @@ op e = do
   where 
     checkAttr ps v = maybe (v `elem` ps) (=="true") <$> findAttrQ v e   
     
- 
 text :: Element -> MML Exp 
 text e = do
   textStyle <- maybe TextNormal getTextType 
@@ -151,8 +147,7 @@ literal e = do
 
 space :: Element -> MML Exp
 space e = do
-  width <- fromMaybe "0.0em" <$> 
-            (findAttrQ "width" e)
+  width <- fromMaybe "0.0em" <$> (findAttrQ "width" e)
   return $ ESpace width
 
 -- Layout 
@@ -185,8 +180,8 @@ row' (x:xs) =
 frac :: Element -> MML Exp
 frac e = do
   [num, dom] <- mapM expr =<< (checkArgs 2 e)
-  --constructor <- maybe "\\frac" (\l -> "\\genfrac{}{}{}{" ++ thicknessToNum l ++ "}{}") <$> (findAttrQ "linethickness" e)
-  let constructor = "\\frac"
+  constructor <- (maybe "\\frac" (\l -> "\\genfrac{}{}{" ++ l ++ "}{}"))
+                  . thicknessZero <$> (findAttrQ "linethickness" e)
   return $ EBinary constructor num dom
 
 msqrt :: Element -> MML Exp
@@ -204,7 +199,7 @@ fenced :: Element -> MML Exp
 fenced e = do
   open  <- fromMaybe "(" <$> (findAttrQ "open" e) 
   close <- fromMaybe ")" <$> (findAttrQ "close" e) 
-  let enclosed = not (null open || null close)
+  let surrounded = not (null open || null close)
   sep  <- fromMaybe "," <$> (findAttrQ "separators" e)
   let expanded = 
         case sep of
@@ -213,24 +208,19 @@ fenced e = do
             let seps = map (\x -> unode "mo" [x]) sep
                 sepsList = seps ++ repeat (last seps) in
                 fInterleave (elChildren e) (sepsList) 
-  case (sep, enclosed) of 
+  case (sep, surrounded) of 
     ("", True) -> EDelimited open close <$> mapM expr (elChildren e)
-    (s, True)  -> expr $ sepAttr (unode "mfenced" 
+    (_, True)  -> expr $ sepAttr (unode "mfenced" 
                     (elAttribs e, expanded))
-    (s, False) -> expr $ unode "mrow" 
+    (_, False) -> expr $ unode "mrow" 
                           ([unode "mo" open | not $ null open] ++ 
                            [unode "mrow" expanded] ++ 
                            [unode "mo" close | not $ null close])
   where 
     sepAttr = add_attr (Attr (unqual "separators") "")
 
---interleave up to end of shorter list 
-fInterleave :: [a] -> [a] -> [a]
-fInterleave [] ys = []
-fInterleave xs [] = []
-fInterleave (x:xs) ys = x : fInterleave ys xs
 
--- This could approximate the variants better
+-- This could approximate the variants 
 enclosed :: Element -> MML Exp
 enclosed = row 
 
@@ -245,34 +235,34 @@ action e = do
 sub :: Element -> MML Exp
 sub e = do
   [base, subs] <- (checkArgs 2 e)
-  ESub <$> expr base <*> local (setPosition FPostfix) (expr subs)
+  ESub <$> expr base <*> postfixExpr subs
 
 sup :: Element -> MML Exp
 sup e = do
   [base, sups] <- (checkArgs 2 e)
-  ESuper <$> expr base <*> local (setPosition FPostfix) (expr sups)
+  ESuper <$> expr base <*> postfixExpr sups
 
 subsup :: Element -> MML Exp
 subsup e = do
   [base, subs, sups] <- (checkArgs 3 e)
-  ESubsup <$> expr base <*> local (setPosition FPostfix) (expr subs) 
-                         <*> local (setPosition FPostfix) (expr sups)
+  ESubsup <$> expr base <*> (postfixExpr subs) 
+                         <*> (postfixExpr sups)
 
 under :: Element -> MML Exp
 under e = do
   [base, below] <- (checkArgs 2 e)
-  EUnder <$> expr base <*> local (setPosition FPostfix) (expr below)
+  EUnder <$> expr base <*> (postfixExpr below)
 
 over :: Element -> MML Exp
 over e = do
   [base, above] <- (checkArgs 2 e)
-  EOver <$>  expr base <*> local (setPosition FPostfix) (expr above)
+  EOver <$>  expr base <*> (postfixExpr above)
 
 underover :: Element -> MML Exp
 underover e = do
   [base, below, above] <- (checkArgs 3 e)
-  EUnderover <$> expr base  <*> local (setPosition FPostfix) (expr below)
-                             <*> local (setPosition FPostfix) (expr above)
+  EUnderover <$> expr base  <*> (postfixExpr below)
+                             <*> (postfixExpr above)
 
 -- Other
 
@@ -310,18 +300,19 @@ tableRow a e = do
   case name e of
     "mtr" -> mapM (tableCell align) (elChildren e)
     "mlabeledtr" -> mapM (tableCell align) (tail $ elChildren e)
-    _ -> throwError $ "tableRow " ++ err e
+    _ -> throwError $ "Invalid Element: Only expecting mtr elements " ++ err e
 
 tableCell :: Alignment -> Element -> MML (Alignment, [Exp])
 tableCell a e = do 
   align <- maybe a toAlignment <$> (findAttrQ "columnalign" e)
   case name e of
     "mtd" -> (,) align <$> mapM expr (elChildren e) 
-    _ -> throwError $ "tableCell " ++ err e
+    _ -> throwError $ "Invalid Element: Only expecting mtd elements " ++ err e
 
 -- Fixup
 
--- See Exception for embellished operators, this only affects stretchy
+-- See Exception for embellished operators in handbox
+-- This only affects stretched
 
 fixNesting :: Exp -> Exp
 fixNesting (EOver (EStretchy e) s) = EStretchy (EOver e s)
@@ -331,6 +322,17 @@ fixNesting (ESub (EStretchy e) s) = EStretchy (ESub e s)
 fixNesting (ESuper (EStretchy e) s) = EStretchy (ESuper e s)
 fixNesting (ESubsup (EStretchy e) s1 s2) = EStretchy (ESubsup e s1 s2)
 fixNesting e = e
+
+-- Library Functions
+
+maybeToEither :: (MonadError e m) => e -> Maybe a -> m a
+maybeToEither = flip maybe return . throwError
+
+--interleave up to end of shorter list 
+fInterleave :: [a] -> [a] -> [a]
+fInterleave [] _ = []
+fInterleave _ [] = []
+fInterleave (x:xs) ys = x : fInterleave ys xs
 
 -- MMLState helper functions
 
@@ -348,6 +350,16 @@ resetPosition s = s {position = Nothing}
 
 -- Utility
 
+getString :: Element -> MML String
+getString e = return s
+  where s = (stripSpaces . concatMap cdData .  onlyText . elContent) e
+
+onlyText :: [Content] -> [CData]
+onlyText [] = []
+onlyText ((Text c):xs) = c : onlyText xs
+onlyText (CRef s : xs)  = (CData CDataText (fromMaybe s $ getUnicode s) Nothing) : onlyText xs
+onlyText (_:xs) = onlyText xs
+
 checkArgs :: Int -> Element -> MML [Element]
 checkArgs x e = do
   let cs = elChildren e
@@ -358,17 +370,9 @@ checkArgs x e = do
 nargs :: Int -> [a] -> Bool
 nargs n xs = length xs == n 
 
-onlyText :: [Content] -> [CData]
-onlyText [] = []
-onlyText ((Text c):xs) = c : onlyText xs
-onlyText (CRef s : xs)  = (CData CDataText (fromMaybe s $ getUnicode s) Nothing) : onlyText xs
-onlyText (_:xs) = onlyText xs
-    
 err :: Element -> String
 err e = name e ++ " line: " ++ (show $ elLine e) ++ (show e)
 
-maybeToEither :: (MonadError e m) => e -> Maybe a -> m a
-maybeToEither = flip maybe return . throwError
 
 findAttrQ :: String -> Element -> MML (Maybe String)
 findAttrQ s e = do 
@@ -423,6 +427,11 @@ spacelike e@(name -> uid) =
   uid `elem` spacelikeElems || uid `elem` cSpacelikeElems &&
     and (map spacelike (elChildren e))
 
+thicknessZero :: Maybe String -> Maybe String
+thicknessZero (Just s) = 
+  let l = thicknessToNum s in
+  if l == "0.0mm" then Just l else Nothing
+thicknessZero Nothing = Nothing
 
 thicknessToNum :: String -> String
 thicknessToNum "thin" = "0.05mm"
@@ -434,6 +443,9 @@ processLength :: String -> String
 processLength s = show (n * (unitToLaTeX unit)) ++ "mm"
   where 
     ((n, unit): _) = reads s :: [(Float, String)]
+
+postfixExpr :: Element -> MML Exp
+postfixExpr e = local (setPosition FPostfix) (expr e)
 
 unitToLaTeX :: String -> Float
 unitToLaTeX "pt" = 2.84

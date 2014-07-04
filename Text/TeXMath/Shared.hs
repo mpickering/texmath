@@ -29,9 +29,8 @@ module Text.TeXMath.Shared
 
 import Text.TeXMath.Types
 import qualified Data.Map as M
-import Data.Maybe
-import Control.Applicative  
-import Debug.Trace
+import Data.Maybe (fromMaybe, listToMaybe)
+import Control.Applicative ((<$>)) 
 
 getMMLType :: TextType -> String
 getMMLType t = fromMaybe "normal" (fst <$> M.lookup t (M.fromList types))
