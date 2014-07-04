@@ -148,11 +148,11 @@ diacriticals =
                , (("\x203E", "\\bar"))
                , (("\xFE37", "\\overbrace"))
                , (("\x23DE", "\\overbrace"))
-               , (("\x23B4", "\\overbracket"))
+               --, (("\x23B4", "\\overbracket")) Only availible in mathtools
                , (("\x00AF", "\\overline"))
                , (("\xFE38", "\\underbrace"))
                , (("\x23DF", "\\underbrace"))
-               , (("\x23B5", "\\underbracket"))
+              -- , (("\x23B5", "\\underbracket")) mathtools
                , (("\x0332", "\\underline"))
                , (("\x0333", "\\underbar"))
                ]
