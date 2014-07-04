@@ -110,15 +110,6 @@ expr' e =
     "annotation-xml" -> annotation e 
     _ -> return $ empty 
 
-spacelikeElems, cSpacelikeElems :: [String]
-spacelikeElems = ["mtext", "mspace", "maligngroup", "malignmark"]
-cSpacelikeElems = ["mrow", "mstyle", "mphantom", "mpadded"]
-
-spacelike :: Element -> Bool
-spacelike e@(name -> uid) = 
-  uid `elem` spacelikeElems || uid `elem` cSpacelikeElems &&
-    and (map spacelike (elChildren e))
-
 
 -- Tokens
 
@@ -185,7 +176,16 @@ space e = do
 -- Layout 
 
 row :: Element -> MML Exp
-row e = EGrouped <$> local resetPosition (row' (elChildren e))
+row e = do
+  front <- mapM expr frontSpaces
+  middle <- local resetPosition (row' body)
+  end <- local resetPosition (mapM expr endSpaces)
+  return $ EGrouped (front ++ middle ++ end)
+  where
+    cs = elChildren e
+    (frontSpaces, noFront)  = span spacelike cs
+    (endSpaces, body) = let (as, bs) = span spacelike (reverse noFront) in
+                          (reverse as, reverse bs)
 
 row' :: [Element] -> MML [Exp]
 row' [] = return []
@@ -262,33 +262,35 @@ action e = do
 
 sub :: Element -> MML Exp
 sub e = do
-  [base, subs] <- mapM expr =<< (checkArgs 2 e)
-  return $ ESub base subs
+  [base, subs] <- (checkArgs 2 e)
+  ESub <$> expr base <*> local (setPosition FPostfix) (expr subs)
 
 sup :: Element -> MML Exp
 sup e = do
-  [base, sups] <- mapM expr =<< (checkArgs 2 e)
-  return $ ESuper base sups
+  [base, sups] <- (checkArgs 2 e)
+  ESuper <$> expr base <*> local (setPosition FPostfix) (expr sups)
 
 subsup :: Element -> MML Exp
 subsup e = do
-  [base, subs, sups] <- mapM expr =<< (checkArgs 3 e)
-  return $ ESubsup base subs sups
+  [base, subs, sups] <- (checkArgs 3 e)
+  ESubsup <$> expr base <*> local (setPosition FPostfix) (expr subs) 
+                         <*> local (setPosition FPostfix) (expr sups)
 
 under :: Element -> MML Exp
 under e = do
-  [base, below] <- mapM expr =<< (checkArgs 2 e)
-  return $ EUnder base below
+  [base, below] <- (checkArgs 2 e)
+  EUnder <$> expr base <*> local (setPosition FPostfix) (expr below)
 
 over :: Element -> MML Exp
 over e = do
-  [base, above] <- mapM expr =<< (checkArgs 2 e)
-  return $ EOver base above
+  [base, above] <- (checkArgs 2 e)
+  EOver <$>  expr base <*> local (setPosition FPostfix) (expr above)
 
 underover :: Element -> MML Exp
 underover e = do
-  [base, below, above] <- mapM expr =<< (checkArgs 3 e)
-  return $ EUnderover base below above
+  [base, below, above] <- (checkArgs 3 e)
+  EUnderover <$> expr base  <*> local (setPosition FPostfix) (expr below)
+                             <*> local (setPosition FPostfix) (expr above)
 
 -- Other
 
@@ -391,6 +393,16 @@ isSpace ' '  = True
 isSpace '\t' = True
 isSpace '\n' = True
 isSpace _    = False
+
+spacelikeElems, cSpacelikeElems :: [String]
+spacelikeElems = ["mtext", "mspace", "maligngroup", "malignmark"]
+cSpacelikeElems = ["mrow", "mstyle", "mphantom", "mpadded"]
+
+spacelike :: Element -> Bool
+spacelike e@(name -> uid) = 
+  uid `elem` spacelikeElems || uid `elem` cSpacelikeElems &&
+    and (map spacelike (elChildren e))
+
 
 thicknessToNum :: String -> String
 thicknessToNum "thin" = "0.05mm"
