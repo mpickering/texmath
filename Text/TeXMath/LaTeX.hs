@@ -17,7 +17,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 -}
 
-module Text.TeXMath.LaTeX (fixTree, toLaTeX) where 
+module Text.TeXMath.LaTeX (toLaTeX) where 
 
 import Text.TeXMath.Types
 import Data.List (intersperse)
@@ -25,9 +25,10 @@ import Text.TeXMath.UnicodeToLaTeX (getLaTeX)
 import qualified Text.TeXMath.Shared as S
 import Data.Maybe (fromMaybe)
 import Data.Generics (everywhere, mkT)
+import Text.TeXMath.Macros
 
-toLaTeX :: [Exp] -> String
-toLaTeX es = concatMap (writeExp . fixTree) es 
+toLaTeX :: DisplayType -> [Exp] -> String
+toLaTeX _ es = concatMap (writeExp . fixTree) es 
 
 square :: [String]
 square = ["\\sqrt"]

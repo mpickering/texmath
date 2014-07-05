@@ -32,7 +32,7 @@ To Improve
   - Handling of mstyle
 -}
 
-module Text.TeXMath.MathMLParser (parseMathML) where
+module Text.TeXMath.MathMLParser (readMathML) where
 
 import Text.XML.Light hiding (onlyText)
 import Text.TeXMath.Types
@@ -49,8 +49,8 @@ import Control.Monad.Except (throwError, Except, runExcept, MonadError)
 import Control.Monad.Reader (ReaderT, runReaderT, asks, local)
 import Data.Generics (everywhere, mkT)
 
-parseMathML :: String -> Either String [Exp]
-parseMathML inp = (:[]) . fixTree <$> (runExcept (runReaderT (i >>= expr) def ))
+readMathML :: String -> Either String [Exp]
+readMathML inp = (:[]) . fixTree <$> (runExcept (flip runReaderT def (i >>= expr)))
   where
     i = maybeToEither "Invalid XML" (parseXMLDoc inp)
 

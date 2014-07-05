@@ -25,10 +25,15 @@ module Text.TeXMath ( texMathToMathML,
                       mathMLToOMML,
                       mathMLToPandoc,
                       mathMLToLaTeX, 
+                      readMathML,
+                      readLaTeX,
+                      toLaTeX,
+                      toOMML,
+                      toMathML,
                       DisplayType(..),
                       )
 where
-import Text.TeXMath.Parser
+import Text.TeXMath.Parser 
 import Text.TeXMath.MathMLParser
 import Text.TeXMath.MathML
 import Text.TeXMath.OMML
@@ -42,31 +47,31 @@ import Data.Maybe (fromMaybe)
 
 texMathToMathML :: DisplayType -> String -> Either String Element
 texMathToMathML dt inp = inp `seq`
-  toMathML dt <$> parseFormula inp
+  toMathML dt <$> readLaTeX inp
 
 texMathToOMML :: DisplayType -> String -> Either String Element
 texMathToOMML dt inp = inp `seq`
-  toOMML dt <$> parseFormula inp
+  toOMML dt <$> readLaTeX inp
 
 texMathToPandoc :: DisplayType -> String -> Either String [Inline]
 texMathToPandoc dt inp = inp `seq`
-  fromMaybe fallback . toPandoc dt <$> parseFormula inp
+  fromMaybe fallback . toPandoc dt <$> readLaTeX inp
   where fallback = [Str $ delim ++ inp ++ delim]
         delim    = case dt of { DisplayInline -> "$"; DisplayBlock -> "$$" }
 
 mathMLToOMML :: DisplayType -> String -> Either String Element
 mathMLToOMML dt inp = inp `seq`
-   (toOMML dt) <$> parseMathML inp
+   (toOMML dt) <$> readMathML inp
 
 mathMLToPandoc :: DisplayType -> String -> Either String [Inline]
 mathMLToPandoc dt inp = inp `seq`
-  fromMaybe fallback . toPandoc dt <$> parseMathML inp
+  fromMaybe fallback . toPandoc dt <$> readMathML inp
   where fallback = [Str $ delim ++ inp ++ delim]
         delim    = case dt of { DisplayInline -> "$"; DisplayBlock -> "$$" }
 
 mathMLToLaTeX :: DisplayType -> String -> Either String Inline
 mathMLToLaTeX dt inp = inp `seq`
-  rt . toLaTeX <$> parseMathML inp 
+  rt . toLaTeX dt <$> readMathML inp 
   where 
     mathType = case dt of { DisplayInline -> InlineMath; 
                             DisplayBlock -> DisplayMath } 
